@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "Copy to <repo>/.mcp.json. Project scope by default - a server useful in one",
+    "repo is context tax in the other twenty.",
+    "",
+    "Every secret is a ${VAR} reference resolved from the process environment.",
+    "Do NOT run `claude mcp add` against this file: it expands placeholders and",
+    "writes the resolved SECRET back, which is how a token reaches git.",
+    "",
+    "Check with `claude mcp list` - a missing variable is a warning, not an error,",
+    "and the server then receives the literal ${VAR} and answers 401."
+  ],
+
+  "mcpServers": {
+    "acme-helpdesk": {
+      "command": "${PROJECT_VENV}/python.exe",
+      "args": ["scripts/helpdesk_mcp.py"],
+      "env": {
+        "HELPDESK_URL": "${HELPDESK_URL:-https://helpdesk.example.com}",
+        "HELPDESK_TOKEN": "${HELPDESK_TOKEN}"
+      }
+    },
+
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+
+    "mysql-readonly": {
+      "command": "npx",
+      "args": ["-y", "@benborla29/mcp-server-mysql"],
+      "env": {
+        "MYSQL_HOST": "${MYSQL_RO_HOST}",
+        "MYSQL_USER": "${MYSQL_RO_USER}",
+        "MYSQL_PASS": "${MYSQL_RO_PASSWORD}",
+        "MYSQL_DB": "${MYSQL_RO_DATABASE}"
+      }
+    }
+  }
+}

@@ -1,0 +1,102 @@
+# The routing law, checked against the files rather than trusted.
+#
+# "A rule proven wrong is deleted in the same change that discovers it -- a
+# missing rule makes Claude ask, a wrong one makes it act." The failure mode
+# these cases catch is the one in between: a rule that is RIGHT but now exists
+# in two places, so one copy gets corrected and the other goes on being read.
+#
+# A file may mention another skill's rule freely as long as it NAMES that skill.
+# Citing the owner is the law; restating it silently is the defect.
+
+- name: the isolation rule is owned by craft-security alone
+  kind: rule
+  origin: >
+    "The single most-repeated real defect in every codebase this brain has
+    seen" (craft-security rule 2). A second copy of the most-repeated rule is
+    the one that will be left stale.
+  proves: craft-security
+  case:
+    phrase: "SAME helper the list view"
+  expect_owner: craft-security
+  # Checked, 2026-08-31: both quote this rule as the WORKED EXAMPLE of how to
+  # phrase one -- capture for "root cause, not symptom", ops-postmortem for
+  # "the consequence, not the anecdote". Neither states it as its own rule.
+  # They are listed so a THIRD copy still fails; do not extend this list
+  # without reading the occurrence first.
+  also_allowed_in: [capture, ops-postmortem]
+
+- name: the separate-test-database rule is owned by craft-testing alone
+  kind: rule
+  origin: >
+    A suite pointed at production wipes it entirely, schema intact, in one
+    run -- truncation is table-level and ignores every row-level protection
+    (craft-testing).
+  proves: craft-testing
+  case:
+    phrase: "physically separate database"
+  expect_owner: craft-testing
+
+- name: the fail-fast deploy rule is owned by craft-git alone
+  kind: rule
+  origin: >
+    Two real production outages. A bare `grep -q` under fail-fast returns
+    non-zero on no-match and kills the deploy silently (craft-git).
+  proves: craft-git
+  case:
+    phrase: "fail.fast|grep -q"
+  expect_owner: craft-git
+  also_allowed_in: [craft-code]
+
+- name: the routing law itself is owned by the brain skill
+  kind: rule
+  origin: >
+    The constitution has to have exactly one copy, or the thing that decides
+    where rules live is itself ambiguous. ops-postmortem legitimately points
+    at it -- and does so by name, which is what makes it a reference.
+  proves: brain
+  case:
+    phrase: "outermost layer"
+  expect_owner: brain
+
+- name: the description budget lives in one place
+  kind: rule
+  origin: >
+    Every skill description is in context in every session at ~150 tokens.
+    Two statements of the budget drift, and the one that is wrong is the one
+    someone plans against (brain/references/splitting.md).
+  proves: brain
+  case:
+    phrase: "~150 tokens"
+  expect_owner: brain
+
+- name: archive-not-delete is owned by ops-prune alone
+  kind: rule
+  origin: >
+    Retiring a skill upstream had covered was about to be a `git rm`. The
+    reason not to is not sentiment: this repository is read by Codex and
+    Gemini too, and they gained nothing when Anthropic shipped the feature —
+    so a rule deleted here is one they re-derive by hitting the same incident.
+    ops-prune already owned "when deletion is right", which is exactly why the
+    correction belongs there and nowhere else: a second copy is how one gets
+    fixed and the other goes on being read.
+  proves: ops-prune
+  case:
+    phrase: "archive, not delete|archive.*never delete"
+  expect_owner: ops-prune
+
+- name: a screen's own declaration outranks the ticket's wording, owned by tickets alone
+  kind: rule
+  origin: >
+    "Ne mogu da obrišem na Excel pregledu" read as a bug; the screen refuses
+    deletion on purpose, and the only place that knowledge lived was in the
+    developers' heads. It now lives in the project's docs/pages/<url_name>.md,
+    read by the extension and by every AI pass here (project_context.pages_block).
+    The doctrine -- a request for something under NE DOZVOLJAVA is a limitation
+    by design, never a fix -- belongs next to KNOWN APPLICATIONS in tickets,
+    where the other "what the model must see about the project" rules live; a
+    second copy in ui-bootstrap (which SHIPS the tester's restatement to the
+    extension) would be the one that drifts.
+  proves: tickets
+  case:
+    phrase: "declaration outranks the ticket's wording"
+  expect_owner: tickets

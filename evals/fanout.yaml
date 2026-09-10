@@ -1,0 +1,208 @@
+# The fan-out machinery.
+#
+# This is the part of the brain that worked least. 172 of 235 launches are one
+# agent alone (73%); 0 of 487 runs were nested. Nothing failed, so nothing said
+# so. These cases exist because the same silence would swallow the fix.
+#
+# The figure read "269 of 269 -- 100%" until 2026-09-10, when both counters were
+# found to group tool_use blocks per transcript RECORD while Claude Code writes
+# one record per block. A batch could not be represented at all. See
+# scripts/brain/transcript.py and its test.
+
+- name: naming several agents also names the ONE MESSAGE mechanic
+  kind: router
+  origin: >
+    Measured over 37 sessions (scripts/brain/delegation.py): 172 of 235
+    launches were a single agent (73%). The router had been naming agents
+    for months. Naming them was not the missing instruction; "in the same
+    message" was.
+  proves: ops-delegation
+  case:
+    prompt: "uradi reviziju koda i napisi testove za modul nabavke"
+  expect_names: ["ONE message"]
+
+- name: a WIDE request is told to name every unit before launching any
+  kind: router
+  origin: >
+    "The unit that never gets named is the second one, because after the
+    first result arrives you are reading rather than planning." The old wide
+    branch said "fan out in parallel" and produced zero parallel launches.
+  proves: ops-delegation
+  case:
+    prompt: "uradi reviziju svih aplikacija u repou i nadji mrtav kod"
+  expect_names: ["NAME EVERY UNIT", "single message"]
+
+- name: a WIDE request also offers the orchestrator as the alternative
+  kind: router
+  origin: >
+    21 of the 55 agents had never been invoked. The orchestrator was the only
+    thing meant to select them and it carried `Agent` in its own
+    `disallowedTools`, so it selected nothing — while its brief blamed the
+    harness. Measured 2026-09-10: a general-purpose subagent launched
+    brain:scout and got a correct answer back, no error. The grant is restored,
+    but an agent no trigger names is an agent nobody chooses, so the router has
+    to name it.
+  proves: ops-delegation
+  case:
+    prompt: "uradi reviziju svih aplikacija u repou i nadji mrtav kod"
+  expect_names: ["orchestrator"]
+
+- name: a single-agent prompt is NOT told to batch
+  kind: router
+  origin: >
+    A solo launch is frequently correct. A router that demands a batch every
+    time is the fourteen ignored reminders again, one layer earlier.
+  proves: ops-delegation
+  case:
+    prompt: "gde je definisana funkcija locations_for"
+  expect_absent: ["ONE message"]
+
+- name: the fan-out rule is owned by ops-delegation alone
+  kind: rule
+  origin: >
+    The rule lived in the orchestrator agent's brief, where it read
+    "Launch independent work in one message" — correct, and unreachable,
+    because the orchestrator carried Agent in its own disallowedTools. A rule
+    in a file that cannot act on it is worse than no rule: it reads as covered.
+    (The brief blamed the harness for that grant; measured 2026-09-10 the
+    harness allows nesting, and the grant is restored.)
+  proves: ops-delegation
+  case:
+    # NB: no markdown emphasis inside the phrase -- the router writes
+    # "the **same** assistant message", and the ** breaks a literal match.
+    phrase: "assistant message run concurrently"
+  expect_owner: ops-delegation
+
+- name: an approve/reject endpoint names dj-action-view
+  kind: router
+  origin: >
+    dj-action-view was one of 21 agents never invoked in 42 sessions, while
+    craft-security calls a POST that changes state "the ones that get
+    forgotten" — no template, so nobody reviews them. The agent existed and
+    nothing ever named it.
+  proves: ops-delegation
+  case:
+    prompt: "dodaj dugme da rukovodilac moze da odobri ili odbije trebovanje"
+  expect_names: [dj-action-view]
+
+- name: dj-action-view survives the agents[:5] truncation on a crowded prompt
+  kind: router
+  origin: >
+    The router prints only the first five agents. A prompt that trips many
+    patterns can push the security-critical one past the cut — silently,
+    because a router naming five agents looks like it worked. Same defect
+    shape already found once on the skills side.
+  proves: craft-security
+  case:
+    # The fixture has to actually exceed the cut, or the case passes for free.
+    # This one matches eight agents; three are dropped. `expect_absent` on a
+    # dropped one is what proves truncation really happened -- an absence
+    # assertion alone would pass against any prompt that named nothing.
+    prompt: >
+      treba mi lista sa filterima i kolonama, detaljan prikaz jednog zapisa,
+      forma za unos novog, izmena postojeceg, brisanje, dugme da se odobri,
+      migracija, i prevod svega
+  expect_names: [dj-action-view]
+  expect_absent: [dj-list-view]
+
+- name: a delete request names the senior delete agent
+  kind: router
+  origin: >
+    dj-delete-view is senior because it decides deletable-at-all before
+    cascade. It had never been invoked; dj-update-view was reached for
+    instead, which is the exact mistake its roster row warns about.
+  proves: ops-delegation
+  case:
+    prompt: "treba da se moze obrisati lokacija iz sifarnika"
+  expect_names: [dj-delete-view]
+
+- name: an attached screenshot routes to screenshot-reader
+  kind: router
+  origin: >
+    The tickets doctrine says "attachments outrank text, every time — a
+    screenshot routinely turns a three-word ticket into an unambiguous
+    specification, and routinely contradicts the words next to it". The agent
+    existed and nothing named it; 0 runs in 42 sessions.
+  proves: tickets
+  case:
+    prompt: "korisnik je poslao sliku greske u prilogu, pogledaj sta pise"
+  expect_names: [screenshot-reader]
+
+- name: a stocktaking question routes to inventory-consultant
+  kind: router
+  origin: >
+    POPIS is an entire module in this ticket store, and the agent that knows
+    how stock, stocktaking and movements have to work had never been named by
+    anything. 0 runs.
+  proves: ops-delegation
+  case:
+    prompt: "kako treba da radi manjak i visak kod popisa zaliha u magacinu"
+  expect_names: [inventory-consultant]
+
+- name: a merge conflict routes to merge-resolver
+  kind: router
+  origin: >
+    Certain to arrive on a repo used from two machines, and nothing named the
+    agent built for it. 0 runs.
+  proves: ops-sync
+  case:
+    prompt: "imam konflikt pri merge-u, ne mogu da push-ujem"
+  expect_names: [merge-resolver]
+
+- name: a MySQL question routes to mysql-consultant
+  kind: router
+  origin: >
+    The stack is MySQL/MariaDB and craft-testing already carries three
+    measured MySQL failure modes (wait_timeout, lock wait, deadlock). The
+    consultant had no path to it. 0 runs.
+  proves: ops-delegation
+  case:
+    prompt: "da li da dodam indeks na ovu kolonu, imam lock wait timeout"
+  expect_names: [mysql-consultant]
+
+- name: a dead-code request names the undertaker
+  kind: router
+  origin: >
+    The "declared but nothing reads it" phrasing produced ten real defects in
+    one sweep, and craft-security records a guard with zero call sites plus a
+    whole feature written against a relation that did not exist. Nothing named
+    an agent that could remove any of it.
+  proves: ops-delegation
+  case:
+    prompt: "ovaj helper nema nijedan poziv nigde, mrtav kod"
+  expect_names: [undertaker]
+
+- name: a plain-language cleanup request also names it
+  kind: router
+  origin: >
+    The operator asks for this without technical vocabulary -- "pocisti",
+    "obrisi visak", "zaostalo" -- and the technical phrasing is the one they
+    reach for AFTER classifying the problem (splitting.md).
+  proves: ops-delegation
+  case:
+    prompt: "pocisti zaostali kod u aplikaciji za lokacije"
+  expect_names: [undertaker]
+
+- name: a console/JS-error question names the integrations register
+  kind: router
+  origin: >
+    ui-bootstrap references/js-hooks.md requires "assert zero console/page
+    errors" in the variant that HIDES a block, and nothing in the toolchain
+    could read a console -- visual-diff shoots pictures. The rule existed
+    without a tool for years.
+  proves: ops-integrations
+  case:
+    prompt: "dugme ne radi, mislim da puca javascript greska u konzoli"
+  expect_names: [ops-integrations]
+
+- name: a which-tool question is answered from the register, not a web search
+  kind: router
+  origin: >
+    Evaluating a tool costs real time, and a rejection with no recorded reason
+    is re-proposed every few months. servers.md and tooling.md hold the
+    decisions AND the rejections; the register is the first stop, and the web
+    search is the second.
+  proves: ops-integrations
+  case:
+    prompt: "koji alat da koristimo za ovo, ima li neki mcp server"
+  expect_names: [ops-integrations]

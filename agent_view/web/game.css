@@ -1,0 +1,413 @@
+  /* ============================================================================
+     IDLE-GAME OVERLAY (F1 + F2) — additive `.ig-*` layer over the existing HUD.
+     Reproduces the client-approved preview on the shipped --hud-* / --cy / --panel-x
+     tokens. NOTHING here redefines a shared class (.hud/.reactor/.panel/.kpi/
+     .focus-pop/.fpop-foot live in app.css and are REUSED, not restyled) — so the
+     HUD is byte-identical when the overlay is off.
+
+     Visibility rule (single source of truth): every overlay element is
+     display:none by default and only shown under `body.v-hud.game-on`. `v-hud`
+     scopes it to the real HUD view (setMode wipes body.className on every switch,
+     so game.js re-asserts `game-on` from gameTick); `game-on` is the enable flag.
+     F2 adds the quiz card, the boss + tags modals, a knowledge counter and a live
+     prestige card — all under the same gate; the modals additionally rely on the
+     [hidden] attr and are only un-hidden by JS while game-on (mirrors #ig-shop).
+     CSS animations are globally neutralised by app.css's reduced-motion rule; the
+     canvas rAF is gated in game.js for the same guarantee.
+     Tokens are the HUD ALWAYS-DARK family (the overlay only ever renders inside the
+     always-dark HUD view) — the one exception is .fpop-game (theme-flipping chrome).
+     ============================================================================ */
+
+  /* ---- shield + enemy canvas — a CHILD of .hud so it shares .hud's stacking
+     context. z:6 sits between #graph(5, the real agent nodes) and .panel(8, whose
+     text must stay readable inside the ring). The reactor/graph sit below it. ---- */
+  #ig-canvas{position:absolute;inset:0;z-index:6;pointer-events:none;display:none}
+  body.v-hud.game-on #ig-canvas{display:block}
+
+  /* ---- HP + Shield bars — directly below the session selector (.sesstabs) ---- */
+  .ig-bars{position:fixed;top:104px;left:50%;transform:translateX(-50%);z-index:9;
+    display:none;flex-direction:column;gap:5px;width:min(340px,60vw);font-family:var(--mono)}
+  body.v-hud.game-on .ig-bars{display:flex}
+  .ig-bar{display:flex;align-items:center;gap:.5rem}
+  .ig-bar-lab{font-size:.56rem;letter-spacing:.16em;color:var(--hud-mut);width:46px;flex:none}
+  .ig-bar-track{flex:1;height:9px;border-radius:6px;background:rgba(8,15,24,.7);border:1px solid var(--panelbd);overflow:hidden}
+  .ig-bar-fill{height:100%;transition:width .35s ease}
+  .ig-bar-fill.hp{background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 40%,#000),var(--acc))}
+  .ig-bar-fill.sh{background:linear-gradient(90deg,color-mix(in srgb,var(--cy) 40%,#000),var(--cy))}
+  .ig-bar-val{font-size:.6rem;color:var(--hud-fg);width:56px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+
+  /* ---- Economy panel — reuses the .panel/.kpi/.amb Telemetry look, docked below pR ---- */
+  .ig-econ{top:322px;right:22px;display:none}
+  body.v-hud.game-on .ig-econ{display:block}
+  .ig-econ .kpi b.tick{transition:color .2s}
+  .ig-econ .kpi b.flash{color:#eaffff}
+  /* daily Collect — a compact cyan action button inside the economy panel */
+  .ig-collect{margin-top:.55rem;width:100%;font-family:var(--mono);font-size:.7rem;font-weight:700;cursor:pointer;
+    padding:.4rem .5rem;border-radius:8px;border:1px solid color-mix(in srgb,var(--cy) 50%,transparent);
+    background:color-mix(in srgb,var(--cy) 12%,transparent);color:var(--cy)}
+  .ig-collect:hover:not(:disabled){background:color-mix(in srgb,var(--cy) 20%,transparent)}
+  .ig-collect:disabled{border-color:var(--line);background:transparent;color:var(--hud-dim);cursor:not-allowed}
+
+  /* ---- Kill-feed — FPS-style fading lines, top-right, left of the Telemetry panel ---- */
+  .ig-killfeed{position:fixed;top:66px;right:254px;z-index:12;width:196px;
+    display:none;flex-direction:column;align-items:flex-end;gap:3px;font-family:var(--mono);pointer-events:none}
+  body.v-hud.game-on .ig-killfeed{display:flex}
+  .ig-kill{display:flex;align-items:center;gap:.4rem;font-size:.72rem;color:var(--hud-fg);
+    background:rgba(8,15,24,.66);border:1px solid var(--panelbd);border-radius:6px;padding:.14rem .5rem;
+    animation:igkill 3.4s ease forwards;white-space:nowrap}
+  @keyframes igkill{0%{opacity:0;transform:translateX(14px)}10%{opacity:1;transform:none}72%{opacity:1}100%{opacity:0;transform:translateX(0)}}
+  .ig-kill-tool{color:var(--hud-fg)}
+  .ig-kill-star{color:var(--cy)}
+  .ig-kill-amt{color:var(--acc);font-weight:700}
+  .ig-kill.crit .ig-kill-amt{color:var(--warn)}
+
+  /* ---- Progression strip — pinned to the very bottom near the tool feed ---- */
+  .ig-progress{position:fixed;left:0;right:0;bottom:0;z-index:10;height:24px;
+    display:none;align-items:center;gap:.6rem;padding:0 14px;font-family:var(--mono);
+    background:linear-gradient(0deg,rgba(5,8,13,.86),rgba(5,8,13,.3));border-top:1px solid var(--panelbd)}
+  body.v-hud.game-on .ig-progress{display:flex}
+  .ig-prog-lv{font-size:.6rem;color:var(--cy);letter-spacing:.14em;flex:none}
+  .ig-prog-track{flex:1;height:5px;border-radius:4px;background:rgba(56,189,248,.12);overflow:hidden}
+  .ig-prog-fill{height:100%;background:linear-gradient(90deg,var(--cy2),var(--cy));transition:width .5s ease}
+  .ig-prog-xp{font-size:.56rem;color:var(--hud-mut);letter-spacing:.14em;flex:none;font-variant-numeric:tabular-nums}
+
+  /* ---- Shop / Stats / Kviz / Boss floating buttons — bottom-right, stacked ----
+     --ig-btn-shift (set by game.js) moves the WHOLE stack LEFT of the focus/wellness
+     reminder column (#focus-cards, bottom-right z55) whenever a reminder is up, so they
+     never overlap the reminders AND stay clear of the mid-right economy panel (the right
+     column can't fit 4 buttons + a tall reminder + the panel — lifting would collide with
+     the panel, so shift sideways instead). 0 when no reminder is visible. Mobile hides the
+     economy panel, so it uses --ig-btn-lift (vertical) below instead. ---- */
+  .ig-shopbtn,.ig-statsbtn,.ig-dashbtn,.ig-quizbtn,.ig-bossbtn{position:fixed;right:calc(20px + var(--ig-btn-shift,0px));z-index:20;
+    font-family:var(--mono);font-size:.8rem;font-weight:700;transition:right .2s ease;
+    cursor:pointer;padding:.55rem .9rem;border-radius:10px;display:none;align-items:center;gap:.45rem;
+    border:1px solid color-mix(in srgb,var(--cy) 55%,transparent);background:color-mix(in srgb,var(--cy) 14%,transparent);color:var(--cy);
+    box-shadow:0 10px 26px rgba(0,0,0,.45);backdrop-filter:blur(6px)}
+  /* 5 buttons compressed into the SAME [66..234] envelope the F2 four used (42px pitch), so
+     Quiz/Boss keep their F2 bottoms and never climb into the mid-right economy panel. */
+  .ig-shopbtn{bottom:66px}
+  .ig-statsbtn{bottom:108px}
+  .ig-dashbtn{bottom:150px}
+  .ig-quizbtn{bottom:192px}
+  body.v-hud.game-on .ig-shopbtn,body.v-hud.game-on .ig-statsbtn,body.v-hud.game-on .ig-dashbtn,body.v-hud.game-on .ig-quizbtn{display:flex}
+  .ig-shopbtn:hover,.ig-statsbtn:hover,.ig-dashbtn:hover,.ig-quizbtn:hover{background:color-mix(in srgb,var(--cy) 22%,transparent)}
+  .ig-shopbtn .ig-shopbtn-tok,.ig-statsbtn .ig-statsbtn-lv,.ig-quizbtn .ig-quizbtn-due{font-size:.66rem;color:var(--hud-fg);font-weight:400}
+  .ig-quizbtn .ig-quizbtn-due.hot{color:var(--warn)}
+  /* Boss affordance — violet, ONLY shown (and pulsing) when the run is available */
+  .ig-bossbtn{bottom:234px;border-color:color-mix(in srgb,var(--violet) 60%,transparent);
+    background:color-mix(in srgb,var(--violet) 16%,transparent);color:var(--violet)}
+  body.v-hud.game-on .ig-bossbtn.avail{display:flex;animation:igbosspulse 1.9s ease-in-out infinite}
+  .ig-bossbtn:hover{background:color-mix(in srgb,var(--violet) 24%,transparent)}
+  @keyframes igbosspulse{0%,100%{box-shadow:0 10px 26px rgba(0,0,0,.45)}
+    50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--violet) 26%,transparent),0 10px 26px rgba(0,0,0,.45)}}
+
+  /* ---- Stats popover — opens above the Stats button (HUD panel look) ---- */
+  .ig-stats-pop{position:fixed;right:20px;bottom:152px;z-index:21;width:264px;font-family:var(--mono);
+    background:var(--panelbg);border:1px solid var(--panelbd);border-radius:12px;padding:.85rem .9rem;
+    box-shadow:0 18px 44px rgba(0,0,0,.55);backdrop-filter:blur(8px)}
+  .ig-stats-pop[hidden]{display:none}
+  body:not(.v-hud) .ig-stats-pop,body:not(.game-on) .ig-stats-pop{display:none}
+  .ig-sp-rank{display:flex;align-items:baseline;gap:.5rem;padding-bottom:.5rem;margin-bottom:.55rem;border-bottom:1px solid var(--panelbd)}
+  .ig-sp-rankname{font-size:1.15rem;font-weight:700;color:var(--cy);letter-spacing:.02em}
+  .ig-sp-ranknum{font-size:.62rem;color:var(--hud-mut);text-transform:uppercase;letter-spacing:.16em;margin-left:auto}
+  .ig-sp-lv{font-size:.68rem;color:var(--hud-fg);margin-bottom:.35rem;display:flex;justify-content:space-between}
+  .ig-sp-lv b{color:var(--cy);font-variant-numeric:tabular-nums}
+  .ig-sp-xpbar{height:8px;border-radius:5px;background:rgba(56,189,248,.12);overflow:hidden;border:1px solid var(--panelbd)}
+  .ig-sp-xpfill{height:100%;background:linear-gradient(90deg,var(--cy2),var(--cy));transition:width .5s ease}
+  .ig-sp-xptext{font-size:.6rem;color:var(--hud-mut);margin:.3rem 0 .6rem;text-align:right;font-variant-numeric:tabular-nums}
+  .ig-sp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem}
+  .ig-sp-cell{display:flex;flex-direction:column;align-items:center;gap:.1rem;background:rgba(8,15,24,.5);
+    border:1px solid var(--panelbd);border-radius:8px;padding:.4rem .2rem}
+  .ig-sp-cell .v{font-size:1rem;font-weight:700;color:var(--hud-fg);font-variant-numeric:tabular-nums}
+  .ig-sp-cell .l{font-size:.52rem;color:var(--faint);text-align:center;line-height:1.15}
+  .ig-sp-mult{margin-top:.55rem;padding-top:.5rem;border-top:1px dashed var(--panelbd);font-size:.66rem;text-align:center;color:var(--hud-mut)}
+  .ig-sp-mult b{color:var(--violet);font-variant-numeric:tabular-nums}
+
+  /* ---- Threats legend — pinned middle-left against the viewport edge ---- */
+  .ig-legend{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:12;
+    display:none;background:var(--panelbg);border:1px solid var(--panelbd);border-radius:10px;padding:.6rem .7rem;
+    font-family:var(--mono);backdrop-filter:blur(4px);box-shadow:0 10px 26px rgba(0,0,0,.4)}
+  body.v-hud.game-on .ig-legend{display:block}
+  .ig-legend-h{font-size:.56rem;letter-spacing:.2em;text-transform:uppercase;color:var(--cy);margin-bottom:.5rem;
+    display:flex;align-items:center;gap:.35rem}
+  .ig-legend-h::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cy);box-shadow:0 0 8px var(--cy)}
+  .ig-leg-row{display:flex;align-items:center;gap:.5rem;padding:.16rem 0;font-size:.66rem;color:var(--hud-mut)}
+  .ig-leg-sw{flex:none;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center}
+
+  /* ---- enable/disable toggle — a NEW variant of the fpop-foot buttons. The base
+     props mirror .fpop-endday/.fpop-settings (app.css) since this button is not part
+     of that shared rule. Lives in the chrome popover (#focus-pop, which THEME-FLIPS via
+     --panel/--line), so it is visible in every view — NOT game-on gated.
+     F1 follow-up: the overlay's identity cyan --cy is HUD-always-dark and never flips,
+     so on a LIGHT theme bright cyan text sat on a near-white popover with poor contrast.
+     Fix = base it on --acc2 (the theme-flipping accent: #38bdf8 dark → #0284c7 light),
+     matching the sibling foot buttons that use --warn/--acc. One rule, no media split. ---- */
+  .fpop-game{width:100%;font-family:var(--mono);font-size:.74rem;font-weight:700;cursor:pointer;
+    padding:.42rem .6rem;border-radius:8px;text-align:left;
+    border:1px solid color-mix(in srgb,var(--acc2) 50%,var(--line));
+    background:color-mix(in srgb,var(--acc2) 12%,transparent);color:var(--acc2)}
+  .fpop-game:hover{background:color-mix(in srgb,var(--acc2) 20%,transparent)}
+  .fpop-game.off{border-color:var(--line);background:transparent;color:var(--mut)}
+  .fpop-game-hint{display:block;font-size:.58rem;color:var(--faint);font-weight:400;margin-top:.2rem;line-height:1.35}
+  /* ---- game SETTINGS entry (quiz topics) in the timer popover foot — a compact secondary
+     of .fpop-game. Shown ONLY while the overlay is active (body.game-on == game enabled + HUD),
+     because gameTagsOpen() opens a HUD overlay modal; when the game is off it would no-op, so it
+     stays hidden rather than being a dead button. Same --acc2 theme-flipping accent as the toggle. */
+  .fpop-gametags{display:none;width:100%;font-family:var(--mono);font-size:.7rem;font-weight:700;
+    cursor:pointer;padding:.36rem .6rem;border-radius:8px;text-align:left;
+    border:1px solid color-mix(in srgb,var(--acc2) 35%,var(--line));
+    background:color-mix(in srgb,var(--acc2) 8%,transparent);color:var(--acc2)}
+  .fpop-gametags:hover{background:color-mix(in srgb,var(--acc2) 16%,transparent)}
+  body.game-on .fpop-gametags{display:block}
+
+  /* ---- shared modal shell (Shop / Boss / Tags) ---- */
+  .ig-modal{position:fixed;inset:0;z-index:210;display:grid;place-items:center;padding:1rem}
+  .ig-modal[hidden]{display:none}
+  /* Double-gate like .ig-stats-pop: an open modal must vanish INSTANTLY on a view
+     switch, not wait for the 1s gameTick->igCloseModals to re-hide it (else it flashes
+     full-screen over the new view). game-on covers the disable case. */
+  body:not(.v-hud) .ig-modal,body:not(.game-on) .ig-modal{display:none}
+  .ig-modal-bd{position:absolute;inset:0;background:color-mix(in srgb,var(--hud-bg) 74%,transparent);backdrop-filter:blur(4px);animation:igfade .18s ease}
+  @keyframes igfade{from{opacity:0}to{opacity:1}}
+  .ig-modal-dlg{position:relative;width:min(880px,94vw);max-height:88vh;display:flex;flex-direction:column;
+    background:var(--panelbg);border:1px solid var(--panelbd);border-radius:14px;overflow:hidden;
+    box-shadow:0 24px 70px rgba(0,0,0,.6);animation:igpop .2s ease;font-family:var(--mono)}
+  @keyframes igpop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+  .ig-modal-head{display:flex;align-items:center;gap:.7rem;padding:.8rem 1rem;border-bottom:1px solid var(--panelbd);flex:none}
+  .ig-modal-head h3{margin:0;font-size:.9rem;color:var(--hud-fg);font-weight:700}
+  .ig-modal-cur{margin-left:auto;font-size:.72rem;color:var(--hud-mut)}
+  .ig-modal-cur b{color:var(--cy)}
+  .ig-x{background:transparent;border:0;color:var(--hud-mut);font-size:1.4rem;line-height:1;cursor:pointer;padding:0 .2rem}
+  .ig-x:hover{color:var(--hud-fg)}
+  .ig-modal-body{padding:1rem;overflow:auto;min-height:0}
+  .ig-shop-empty{font-size:.72rem;color:var(--hud-dim);text-align:center;padding:2rem 1rem}
+
+  /* shop cards */
+  .ig-shop-cat{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--cy);margin:.2rem 0 .55rem;
+    display:flex;align-items:center;gap:.5rem}
+  .ig-shop-cat::after{content:"";flex:1;height:1px;background:var(--panelbd)}
+  .ig-shop-cat:not(:first-child){margin-top:1.2rem}
+  .ig-shop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.7rem}
+  .ig-card{background:rgba(8,15,24,.5);border:1px solid var(--panelbd);border-radius:11px;padding:.75rem .8rem;display:flex;flex-direction:column;gap:.35rem}
+  .ig-card-top{display:flex;align-items:center;gap:.5rem}
+  .ig-card-ico{font-size:1.15rem;line-height:1;flex:none}
+  .ig-card-title{font-size:.8rem;color:var(--hud-fg);font-weight:700}
+  .ig-card-lvl{margin-left:auto;font-size:.58rem;color:var(--hud-dim);white-space:nowrap}
+  .ig-card-desc{font-size:.68rem;color:var(--hud-mut);line-height:1.4;flex:1}
+  .ig-card-eff{font-size:.68rem;color:var(--acc)}
+  .ig-card-buy{margin-top:.2rem;font-family:var(--mono);font-size:.72rem;font-weight:700;cursor:pointer;
+    padding:.4rem .5rem;border-radius:8px;border:1px solid color-mix(in srgb,var(--cy) 50%,transparent);
+    background:color-mix(in srgb,var(--cy) 12%,transparent);color:var(--cy)}
+  .ig-card-buy:hover:not(:disabled){background:color-mix(in srgb,var(--cy) 20%,transparent)}
+  .ig-card-buy:disabled{border-color:var(--line);background:transparent;color:var(--hud-dim);cursor:not-allowed}
+  .ig-card.prestige{grid-column:1/-1;border-color:color-mix(in srgb,var(--violet) 50%,transparent);background:color-mix(in srgb,var(--violet) 8%,transparent)}
+  .ig-card.prestige .ig-card-title{color:var(--violet)}
+  .ig-card.prestige .ig-card-eff{color:var(--violet)}
+
+  /* transient toast (collect paid / withheld / purchase) */
+  .ig-toast{position:fixed;left:50%;top:150px;transform:translateX(-50%);z-index:230;font-family:var(--mono);font-size:.78rem;
+    padding:.5rem .9rem;border-radius:9px;background:var(--panelbg);border:1px solid var(--panelbd);color:var(--hud-fg);
+    box-shadow:0 12px 30px rgba(0,0,0,.5);display:none}
+  body.v-hud.game-on .ig-toast.show{display:block;animation:igfade .2s ease}
+  .ig-toast.ok{border-color:color-mix(in srgb,var(--acc) 55%,transparent);color:var(--acc)}
+  .ig-toast.no{border-color:color-mix(in srgb,var(--warn) 55%,transparent);color:var(--warn)}
+
+  /* ============================================================================
+     F2 — QUIZ CARD (.ig-quiz-*). Centre-screen SPOTLIGHT when a session is live +
+     the user is idle (anti-phone); otherwise a quiet docked panel opened on demand.
+     display:none unless body.v-hud.game-on + .open (byte-identical when off). The
+     scrim is a full-viewport inset:0 layer so its backdrop-filter never re-bases the
+     card (the card is a SIBLING, not a child). ============================================================================ */
+  .ig-quiz-scrim{position:fixed;inset:0;z-index:211;display:none;
+    background:color-mix(in srgb,var(--hud-bg) 62%,transparent);backdrop-filter:blur(3px)}
+  body.v-hud.game-on .ig-quiz-scrim.on{display:block;animation:igfade .2s ease}
+  .ig-quiz{position:fixed;z-index:60;left:50%;bottom:150px;transform:translateX(-50%);
+    width:min(560px,92vw);display:none;font-family:var(--mono)}
+  body.v-hud.game-on .ig-quiz.open{display:block}
+  .ig-quiz.spotlight{z-index:212;top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(640px,94vw)}
+  .ig-quiz-card{background:var(--panelbg);border:1px solid var(--panelbd);border-radius:14px;overflow:hidden;
+    display:flex;flex-direction:column;max-height:82vh;box-shadow:0 24px 60px rgba(0,0,0,.6);backdrop-filter:blur(8px)}
+  .ig-quiz.spotlight .ig-quiz-card{border-color:color-mix(in srgb,var(--cy) 45%,var(--panelbd));
+    box-shadow:0 0 0 1px color-mix(in srgb,var(--cy) 26%,transparent),0 30px 80px rgba(0,0,0,.72)}
+  .ig-quiz-head{display:flex;align-items:center;gap:.55rem;padding:.65rem .85rem;border-bottom:1px solid var(--panelbd);flex:none}
+  .ig-quiz-badge{font-size:.54rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cy);
+    border:1px solid color-mix(in srgb,var(--cy) 40%,transparent);border-radius:5px;padding:.13rem .4rem;font-variant-numeric:tabular-nums}
+  .ig-quiz-htitle{font-size:.78rem;color:var(--hud-fg);font-weight:700}
+  .ig-quiz-min{margin-left:auto;background:transparent;border:0;color:var(--hud-mut);font-size:1.2rem;line-height:1;cursor:pointer;padding:0 .25rem}
+  .ig-quiz-min:hover{color:var(--hud-fg)}
+  .ig-quiz-body{padding:.9rem;overflow:auto;min-height:0}
+  .ig-quiz-stem{font-family:var(--sans);font-size:.94rem;line-height:1.5;color:var(--hud-fg);margin-bottom:.85rem}
+  .ig-quiz-opts{display:flex;flex-direction:column;gap:.45rem}
+  .ig-quiz-opt{display:flex;gap:.55rem;align-items:flex-start;text-align:left;width:100%;cursor:pointer;
+    font-family:var(--sans);font-size:.86rem;line-height:1.4;color:var(--hud-fg);
+    background:rgba(8,15,24,.5);border:1px solid var(--panelbd);border-radius:10px;padding:.5rem .6rem;transition:border-color .15s,background .15s}
+  .ig-quiz-opt:hover:not(:disabled){border-color:color-mix(in srgb,var(--cy) 50%,transparent);background:rgba(8,15,24,.72)}
+  .ig-quiz-opt:disabled{cursor:default}
+  .ig-quiz-opt .k{font-family:var(--mono);font-weight:700;color:var(--cy);flex:none;width:1.15rem}
+  .ig-quiz-opt.correct{border-color:color-mix(in srgb,var(--acc) 60%,transparent);background:color-mix(in srgb,var(--acc) 14%,transparent)}
+  .ig-quiz-opt.correct .k{color:var(--acc)}
+  .ig-quiz-opt.wrong{border-color:color-mix(in srgb,var(--bad) 55%,transparent);background:color-mix(in srgb,var(--bad) 12%,transparent)}
+  .ig-quiz-opt.wrong .k{color:var(--bad)}
+  .ig-quiz-opt.dim{opacity:.5}
+  /* reveal — verdict is NEVER red on a miss (a withhold, not a penalty) */
+  .ig-quiz-reveal{margin-top:.85rem;border-top:1px dashed var(--panelbd);padding-top:.75rem;font-family:var(--sans);font-size:.83rem;line-height:1.55}
+  .ig-quiz-verdict{font-family:var(--mono);font-size:.74rem;font-weight:700;letter-spacing:.03em;margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem}
+  .ig-quiz-verdict.ok{color:var(--acc)}
+  .ig-quiz-verdict.miss{color:var(--cy)}
+  .ig-quiz-withhold{background:color-mix(in srgb,var(--cy) 8%,transparent);border:1px solid color-mix(in srgb,var(--cy) 26%,transparent);
+    border-radius:9px;padding:.5rem .6rem;color:var(--hud-mut);font-size:.79rem;line-height:1.5;margin-bottom:.65rem}
+  .ig-quiz-expl{color:var(--hud-fg)}
+  .ig-quiz-expl .lab{color:var(--cy);font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:.2rem}
+  .ig-quiz-why{margin-top:.6rem;color:var(--hud-mut)}
+  .ig-quiz-why .lab{color:var(--warn);font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:.2rem}
+  .ig-quiz-rej{margin-top:.6rem;font-size:.77rem;color:var(--hud-mut)}
+  .ig-quiz-rej .row{padding:.16rem 0;display:flex;gap:.4rem}
+  .ig-quiz-rej .rk{color:var(--bad);font-family:var(--mono);font-weight:700;flex:none}
+  .ig-quiz-empty{text-align:center;padding:1.5rem .8rem;color:var(--hud-mut);font-family:var(--sans);font-size:.86rem;line-height:1.6}
+  .ig-quiz-cta{margin-top:.8rem;font-family:var(--mono);font-size:.74rem;font-weight:700;cursor:pointer;padding:.45rem .85rem;border-radius:9px;
+    border:1px solid color-mix(in srgb,var(--cy) 50%,transparent);background:color-mix(in srgb,var(--cy) 12%,transparent);color:var(--cy)}
+  .ig-quiz-cta:hover{background:color-mix(in srgb,var(--cy) 20%,transparent)}
+  .ig-quiz-foot{display:flex;align-items:center;gap:.5rem;padding:.6rem .85rem;border-top:1px solid var(--panelbd);flex:none}
+  .ig-quiz-foot button{font-family:var(--mono);font-size:.7rem;font-weight:700;cursor:pointer;padding:.4rem .6rem;border-radius:8px;
+    border:1px solid var(--panelbd);background:rgba(8,15,24,.5);color:var(--hud-mut)}
+  .ig-quiz-foot button:hover{color:var(--hud-fg);border-color:color-mix(in srgb,var(--cy) 40%,transparent)}
+  .ig-quiz-foot button:disabled{opacity:.4;cursor:default}
+  .ig-quiz-retire{margin-right:auto}
+  .ig-quiz-foot .ig-quiz-next{border-color:color-mix(in srgb,var(--cy) 50%,transparent);background:color-mix(in srgb,var(--cy) 12%,transparent);color:var(--cy)}
+
+  /* ============================================================================
+     F2 — BOSS run (reuses the .ig-modal shell; violet = boss identity) ============================================================================ */
+  .ig-modal-cur.boss b{color:var(--violet)}
+  .ig-boss-prog{display:flex;align-items:center;gap:.6rem;margin-bottom:.95rem;font-size:.64rem;color:var(--hud-mut);font-variant-numeric:tabular-nums}
+  .ig-boss-prog .n{flex:none;letter-spacing:.1em}
+  .ig-boss-track{flex:1;height:7px;border-radius:5px;background:rgba(167,139,250,.14);overflow:hidden;border:1px solid var(--panelbd)}
+  .ig-boss-fill{height:100%;background:linear-gradient(90deg,var(--violet),var(--cy));transition:width .35s ease}
+  .ig-boss-stem{font-family:var(--sans);font-size:.95rem;line-height:1.5;color:var(--hud-fg);margin-bottom:.85rem}
+  .ig-boss-opts{display:flex;flex-direction:column;gap:.45rem}
+  .ig-boss-fb{margin-top:.85rem;font-family:var(--sans);font-size:.82rem;line-height:1.5;padding-top:.7rem;border-top:1px dashed var(--panelbd)}
+  .ig-boss-fb .verdict{font-family:var(--mono);font-size:.72rem;font-weight:700;margin-bottom:.35rem}
+  .ig-boss-fb .verdict.ok{color:var(--acc)}
+  .ig-boss-fb .verdict.miss{color:var(--cy)}
+  .ig-boss-next{margin-top:.85rem;width:100%;font-family:var(--mono);font-size:.76rem;font-weight:700;cursor:pointer;padding:.5rem;border-radius:9px;
+    border:1px solid color-mix(in srgb,var(--violet) 55%,transparent);background:color-mix(in srgb,var(--violet) 14%,transparent);color:var(--violet)}
+  .ig-boss-next:hover{background:color-mix(in srgb,var(--violet) 22%,transparent)}
+  .ig-boss-summary{text-align:center;padding:1.4rem 1rem;font-family:var(--sans)}
+  .ig-boss-verdict-big{font-family:var(--mono);font-size:1.5rem;font-weight:700;letter-spacing:.02em;margin-bottom:.5rem}
+  .ig-boss-verdict-big.pass{color:var(--acc)}
+  .ig-boss-verdict-big.fail{color:var(--cy)}
+  .ig-boss-score{font-size:.9rem;color:var(--hud-fg);margin-bottom:.3rem;font-variant-numeric:tabular-nums}
+  .ig-boss-forgive{font-size:.82rem;color:var(--hud-mut);line-height:1.5;margin:.5rem auto .9rem;max-width:34ch}
+  .ig-boss-rewards{display:flex;justify-content:center;gap:1.4rem;margin-bottom:1rem;flex-wrap:wrap}
+  .ig-boss-reward{display:flex;flex-direction:column;align-items:center;gap:.15rem}
+  .ig-boss-reward .v{font-family:var(--mono);font-size:1.05rem;font-weight:700;color:var(--acc);font-variant-numeric:tabular-nums}
+  .ig-boss-reward .l{font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .ig-boss-done{font-family:var(--mono);font-size:.78rem;font-weight:700;cursor:pointer;padding:.5rem 1.4rem;border-radius:9px;
+    border:1px solid color-mix(in srgb,var(--cy) 50%,transparent);background:color-mix(in srgb,var(--cy) 12%,transparent);color:var(--cy)}
+  .ig-boss-empty{text-align:center;padding:1.4rem 1rem;color:var(--hud-mut);font-family:var(--sans);font-size:.86rem;line-height:1.6}
+
+  /* ============================================================================
+     F2 — TAGS settings (reuses the .ig-modal shell). Native <input>, no dropdown. ============================================================================ */
+  .ig-tags-intro{font-family:var(--sans);font-size:.82rem;color:var(--hud-mut);line-height:1.5;margin-bottom:.85rem}
+  .ig-tags-sech{font-size:.56rem;letter-spacing:.18em;text-transform:uppercase;color:var(--cy);margin:.2rem 0 .5rem}
+  .ig-tags-pal{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}
+  .ig-tag{font-family:var(--mono);font-size:.72rem;cursor:pointer;padding:.3rem .65rem;border-radius:20px;
+    border:1px solid var(--panelbd);background:rgba(8,15,24,.5);color:var(--hud-mut)}
+  .ig-tag:hover{color:var(--hud-fg);border-color:color-mix(in srgb,var(--cy) 40%,transparent)}
+  .ig-tag.on{border-color:color-mix(in srgb,var(--cy) 55%,transparent);background:color-mix(in srgb,var(--cy) 14%,transparent);color:var(--cy)}
+  .ig-tag .x{margin-left:.35rem;opacity:.7}
+  .ig-tags-empty{font-family:var(--sans);font-size:.78rem;color:var(--faint);font-style:italic}
+  .ig-tags-add{display:flex;gap:.5rem;margin-bottom:1rem}
+  .ig-tags-in{flex:1;font-family:var(--mono);font-size:.78rem;background:rgba(8,15,24,.6);border:1px solid var(--panelbd);
+    border-radius:8px;padding:.42rem .6rem;color:var(--hud-fg);min-width:0}
+  .ig-tags-in:focus{outline:none;border-color:color-mix(in srgb,var(--cy) 55%,transparent)}
+  .ig-tags-addbtn{font-family:var(--mono);font-size:.72rem;font-weight:700;cursor:pointer;padding:.4rem .7rem;border-radius:8px;
+    border:1px solid var(--panelbd);background:rgba(8,15,24,.5);color:var(--hud-mut);flex:none}
+  .ig-tags-addbtn:hover{color:var(--hud-fg)}
+  .ig-tags-acts{display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap}
+  .ig-tags-gen{font-family:var(--mono);font-size:.74rem;font-weight:700;cursor:pointer;padding:.45rem .8rem;border-radius:9px;
+    border:1px solid color-mix(in srgb,var(--violet) 50%,transparent);background:color-mix(in srgb,var(--violet) 12%,transparent);color:var(--violet)}
+  .ig-tags-gen:hover{background:color-mix(in srgb,var(--violet) 20%,transparent)}
+  .ig-tags-gen:disabled{opacity:.5;cursor:default}
+  .ig-tags-save{font-family:var(--mono);font-size:.74rem;font-weight:700;cursor:pointer;padding:.45rem .9rem;border-radius:9px;
+    border:1px solid color-mix(in srgb,var(--cy) 55%,transparent);background:color-mix(in srgb,var(--cy) 14%,transparent);color:var(--cy)}
+  .ig-tags-save:hover{background:color-mix(in srgb,var(--cy) 22%,transparent)}
+  .ig-tags-note{font-family:var(--sans);font-size:.74rem;color:var(--hud-mut);margin-top:.7rem;min-height:1em}
+  .ig-tags-note.ok{color:var(--acc)}
+
+  /* ============================================================================
+     F3 — GAME DASHBOARD (.ig-dash-* / .ig-dh-*). Rich read-only overview inside the
+     shared .ig-modal shell (so it inherits the v-hud.game-on + [hidden] double-gate).
+     HUD always-dark token family throughout (the modal surface is --panelbg), matching
+     the sibling .ig-* panels. Tabular-nums on every metric. ============================================================================ */
+  .ig-dash-hero{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:.9rem}
+  .ig-dh-hcard{background:rgba(8,15,24,.5);border:1px solid var(--panelbd);border-radius:12px;padding:.75rem .85rem;display:flex;flex-direction:column;gap:.15rem}
+  .ig-dh-hcard.rank{border-color:color-mix(in srgb,var(--violet) 40%,var(--panelbd))}
+  .ig-dh-hcard.lvl{border-color:color-mix(in srgb,var(--cy) 40%,var(--panelbd))}
+  .ig-dh-hk{font-size:.54rem;letter-spacing:.2em;text-transform:uppercase;color:var(--hud-mut)}
+  .ig-dh-rankname{font-size:1.35rem;font-weight:700;color:var(--violet);letter-spacing:.01em;line-height:1.1;margin:.1rem 0}
+  .ig-dh-lvbig{font-size:1.6rem;font-weight:700;color:var(--cy);line-height:1;font-variant-numeric:tabular-nums;margin:.1rem 0}
+  .ig-dh-hsub{font-size:.66rem;color:var(--hud-mut);font-variant-numeric:tabular-nums}
+  .ig-dh-hsub b{color:var(--acc)}
+  .ig-dh-xpbar{height:8px;border-radius:5px;background:rgba(56,189,248,.12);overflow:hidden;border:1px solid var(--panelbd);margin:.3rem 0 .25rem}
+  .ig-dh-xpfill{height:100%;background:linear-gradient(90deg,var(--cy2),var(--cy));transition:width .5s ease}
+
+  .ig-dash-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:.5rem;margin-bottom:.4rem}
+  .ig-dh-tile{display:flex;flex-direction:column;align-items:center;gap:.15rem;background:rgba(8,15,24,.5);
+    border:1px solid var(--panelbd);border-radius:9px;padding:.5rem .3rem}
+  .ig-dh-tile .v{font-size:1.05rem;font-weight:700;color:var(--hud-fg);font-variant-numeric:tabular-nums;text-align:center}
+  .ig-dh-tile .l{font-size:.54rem;color:var(--faint);text-align:center;line-height:1.2;letter-spacing:.04em}
+  .ig-dh-tile.g .v{color:var(--acc)}
+  .ig-dh-tile.a .v{color:var(--warn)}
+  .ig-dh-tile.cyv .v{color:var(--cy)}
+  .ig-dh-tile.accv .v{color:var(--acc)}
+  .ig-dh-tile.warnv{border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+  .ig-dh-tile.warnv .v{color:var(--warn)}
+  .ig-dh-tile.violetv{border-color:color-mix(in srgb,var(--violet) 45%,transparent)}
+  .ig-dh-tile.violetv .v{color:var(--violet)}
+
+  .ig-dash-sec{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--cy);margin:1.2rem 0 .55rem;
+    display:flex;align-items:center;gap:.5rem}
+  .ig-dash-sec::after{content:"";flex:1;height:1px;background:var(--panelbd)}
+
+  .ig-dash-cats{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.7rem}
+  .ig-dash-catcard{background:rgba(8,15,24,.4);border:1px solid var(--panelbd);border-radius:11px;padding:.6rem .65rem;display:flex;flex-direction:column;gap:.3rem}
+  .ig-dh-cathead{display:flex;align-items:center;justify-content:space-between;gap:.5rem;font-size:.72rem;color:var(--hud-fg);font-weight:700;
+    padding-bottom:.35rem;border-bottom:1px solid var(--panelbd)}
+  .ig-dh-catn{font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--cy);font-weight:400;flex:none}
+  .ig-dh-up{display:grid;grid-template-columns:18px minmax(72px,auto) 1fr auto;gap:.5rem;align-items:center;padding:.18rem 0;opacity:.5}
+  .ig-dh-up.have{opacity:1}
+  .ig-dh-up-ico{font-size:.9rem;line-height:1}
+  .ig-dh-up-name{font-size:.72rem;color:var(--hud-fg);white-space:nowrap}
+  .ig-dh-up-eff{font-size:.62rem;color:var(--hud-mut);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ig-dh-up-own{font-size:.72rem;font-weight:700;color:var(--hud-dim);font-variant-numeric:tabular-nums;flex:none;min-width:1.8rem;text-align:right}
+  .ig-dh-up.have .ig-dh-up-own{color:var(--cy)}
+
+  .ig-dash-accbar{height:7px;border-radius:5px;background:rgba(56,189,248,.12);overflow:hidden;border:1px solid var(--panelbd);margin-top:.55rem}
+  .ig-dash-accfill{height:100%;background:linear-gradient(90deg,var(--cy2),var(--acc));transition:width .5s ease}
+
+  .ig-dash-income{background:rgba(8,15,24,.4);border:1px solid var(--panelbd);border-radius:11px;padding:.7rem .8rem}
+  .ig-di-row{display:flex;align-items:baseline;gap:.6rem;padding:.15rem 0}
+  .ig-di-v{font-size:1.1rem;font-weight:700;color:var(--cy);font-variant-numeric:tabular-nums;flex:none;min-width:2.4rem}
+  .ig-di-l{font-size:.72rem;color:var(--hud-mut);line-height:1.4}
+  .ig-di-note{margin-top:.5rem;padding-top:.5rem;border-top:1px dashed var(--panelbd);font-size:.72rem;color:var(--hud-mut);line-height:1.5}
+  .ig-di-note b{color:var(--acc)}
+
+  /* ---- narrow layout: no sideways scroll; wide content scrolls in its own box ---- */
+  @media(max-width:640px){
+    .ig-econ,.ig-legend{display:none!important}
+    .ig-killfeed{top:96px;right:8px;width:150px}
+    .ig-bars{top:116px;width:min(280px,80vw)}
+    /* mobile hides the economy panel (below), so lift the stack VERTICALLY over the
+       reminder here instead of shifting (a full-width reminder leaves no room to shift). */
+    .ig-shopbtn{right:10px;bottom:calc(40px + var(--ig-btn-lift,0px));padding:.45rem .7rem}
+    .ig-statsbtn{right:10px;bottom:calc(79px + var(--ig-btn-lift,0px));padding:.45rem .7rem}
+    .ig-dashbtn{right:10px;bottom:calc(118px + var(--ig-btn-lift,0px));padding:.45rem .7rem}
+    .ig-quizbtn{right:10px;bottom:calc(157px + var(--ig-btn-lift,0px));padding:.45rem .7rem}
+    .ig-bossbtn{right:10px;bottom:calc(196px + var(--ig-btn-lift,0px));padding:.45rem .7rem}
+    .ig-stats-pop{right:10px;width:min(264px,92vw)}
+    .ig-shop-grid{grid-template-columns:1fr}
+    .ig-dash-hero{grid-template-columns:1fr}
+    .ig-dash-cats{grid-template-columns:1fr}
+    .ig-quiz{bottom:96px;width:min(560px,94vw)}
+    .ig-quiz.spotlight{width:min(560px,94vw)}
+  }

@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Agent View</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='4' fill='%2338e6ff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="rpg.css">
+<link rel="stylesheet" href="calendar.css">
+<link rel="stylesheet" href="game.css">
+</head>
+<body class="v-hud">
+
+<div class="top">
+  <!-- The connection dot lives INSIDE the timer pill (operator 2026-08-19); the
+       "N sessions" text is gone from the bar. #sstat stays in the DOM, hidden,
+       because core.js still writes the count into it. -->
+  <span class="stat" id="sstat" hidden>0 sessions</span>
+  <div class="focus-pill" id="focus-pill" role="button" tabindex="0" aria-label="Focus and wellness — click for today's stats" title="Focus &amp; wellness &mdash; click for today's stats">
+    <span class="dot" id="conn" title="veza sa serverom"></span>
+    <span class="fp-ring" id="fp-ring" aria-hidden="true"></span>
+    <span class="fp-main"><span class="fp-time" id="fp-time">--:--</span><span class="fp-pauza" id="fp-pauza" hidden>PAUZA</span></span>
+    <button class="fp-pause btn" id="fp-pause" type="button" title="Pauza / Nastavi">Pauza</button>
+  </div>
+  <button class="ipchip" id="ipchip" title="server address on your LAN — click to copy, then open it on your phone" style="display:none"></button>
+  <span class="grow"></span>
+  <div class="seg" title="view">
+    <button id="mode-hud" class="on" title="HUD &mdash; right-click for HUD&middot;All">&#9678; HUD</button>
+    <button id="mode-table">&#9636; Table</button>
+    <button id="mode-dash">&#9638; Dashboard</button>
+    <button id="mode-flow">&#8623; Flow</button>
+    <button id="mode-tickets">&#9707; Tickets</button>
+    <button id="mode-brain">&#129504; Brain log</button>
+    <button id="mode-git">&#9095; Git</button>
+    <button id="mode-prod">&#128421; Production</button>
+    <button id="mode-mail">&#9993; Mail</button>
+    <button id="mode-profile">&#128202; Profil</button>
+    <button id="mode-calendar">&#128197; Kalendar</button>
+  </div>
+  <button class="btn act" id="askclaude" title="launch a Claude session with a prompt">&#129302; Claude</button>
+  <!-- F6 glas: this button toggles #voice-panel; Ctrl+Shift+Space toggles LISTENING from
+       anywhere. Distinct from #voice below, which is event read-aloud (TTS) - same word,
+       two features, so the ids must not be confused. -->
+  <button class="btn" id="voice-mic" type="button" aria-pressed="false"
+          title="Glasovna komanda (Ctrl+Shift+Space)" aria-label="Glasovna komanda">&#127908;</button>
+  <div class="toolseg" role="group" aria-label="notifications">
+    <button class="btn" id="voice" title="speak events aloud" aria-label="speak events aloud">&#128483;</button>
+    <button class="btn" id="sound" title="toggle sound" aria-label="toggle sound">&#128266;</button>
+    <button class="btn" id="mail-mute" title="sound for new mail" aria-label="sound for new mail">&#128276;</button>
+  </div>
+  <button class="btn" id="stopsrv" title="stop the server">&#9211;</button>
+</div>
+
+<!-- page-level ambient chrome (shared by HUD + Dashboard) -->
+<div class="grid"></div>
+<div class="frame"><i></i></div>
+<div class="scan"></div>
+
+<!-- ================= HUD ================= -->
+<div id="view-hud">
+  <div class="hud">
+    <!-- idle-game: shield + enemy-swarm canvas — a child of .hud so the panels (z8)
+         render on top and stay readable inside the ring (z6, above #graph's z5). -->
+    <canvas id="ig-canvas"></canvas>
+    <div class="sesstabs" id="hud-tabs"></div>
+
+    <!-- idle-game: HP + Shield bars, directly below the session selector -->
+    <div class="ig-bars" id="ig-bars">
+      <div class="ig-bar"><span class="ig-bar-lab">HP</span>
+        <div class="ig-bar-track"><div class="ig-bar-fill hp" id="ig-hp-fill" style="width:0%"></div></div>
+        <span class="ig-bar-val" id="ig-hp-val">&mdash;</span></div>
+      <div class="ig-bar"><span class="ig-bar-lab">SHIELD</span>
+        <div class="ig-bar-track"><div class="ig-bar-fill sh" id="ig-sh-fill" style="width:0%"></div></div>
+        <span class="ig-bar-val" id="ig-sh-val">&mdash;</span></div>
+    </div>
+
+    <div class="reactor">
+      <div class="ticks"></div>
+      <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+      <div class="sweep"></div>
+      <div class="core"><div class="label">CLAUDE</div></div>
+    </div>
+    <canvas id="graph"></canvas>
+    <div class="hud-empty" id="hud-empty">No active sessions &mdash; waiting for the first event</div>
+    <div class="panel pL"><h4>Active agents</h4><div id="hud-agents"></div></div>
+    <div class="panel pR"><h4>Telemetry</h4>
+      <div class="kpi"><span>agents running</span><b class="g" id="k-run">0</b></div>
+      <div class="kpi"><span>completed</span><b id="k-done">0</b></div>
+      <div class="kpi"><span>awaiting reply</span><b class="a" id="k-ask">0</b></div>
+      <div class="kpi"><span>errors</span><b class="r" id="k-err">0</b></div>
+      <div class="amb" id="amb">
+        <div class="kpi"><span>agents total</span><b id="am-agents">&mdash;</b></div>
+        <div class="kpi"><span>hours worked</span><b id="am-hours">&mdash;</b></div>
+        <div class="kpi"><span>output</span><b id="am-out">&mdash;</b></div>
+        <div class="kpi"><span>cache hit</span><b id="am-cache">&mdash;</b></div>
+      </div>
+    </div>
+    <div class="panel pB feed"><h4>Tools</h4><div id="hud-feed"></div></div>
+
+    <!-- idle-game: Economy panel — same .panel/.kpi/.amb family as Telemetry, docked below pR -->
+    <div class="panel ig-econ" id="ig-econ">
+      <h4>Economy &middot; overlay</h4>
+      <div class="kpi"><span>tokens</span><b class="tick" id="ig-tok">&mdash;</b></div>
+      <div class="kpi"><span>income</span><b class="g" id="ig-rate">&mdash;</b></div>
+      <div class="kpi"><span>knowledge</span><b class="a" id="ig-know">&mdash;</b></div>
+      <div class="kpi"><span>level</span><b id="ig-econ-lv">&mdash;</b></div>
+      <div class="amb">
+        <div class="kpi"><span>lifetime</span><b id="ig-lifetime">&mdash;</b></div>
+        <div class="kpi"><span>daily bonus</span><b class="a" id="ig-collect-state">&mdash;</b></div>
+      </div>
+      <button class="ig-collect" id="ig-collect" type="button" disabled>Collect</button>
+    </div>
+
+    <div class="hud-hint"><b>hover</b> = details &middot; <b>click</b> = inspector &middot; <b>drag</b> = move &middot; <kbd>dbl</kbd> = reset</div>
+  </div>
+</div>
+
+<!-- ================= IDLE-GAME OVERLAY (body-level pieces) ================= -->
+<!-- kill-feed (FPS-style, top-right, fades out) -->
+<div class="ig-killfeed" id="ig-killfeed"></div>
+
+<!-- threats legend — middle-left against the viewport edge -->
+<div class="ig-legend" id="ig-legend">
+  <div class="ig-legend-h">Threats</div>
+  <div class="ig-leg-row"><span class="ig-leg-sw"><svg width="14" height="14" viewBox="-8 -8 16 16"><path d="M0 -6 6 0 0 6 -6 0Z" fill="rgba(8,15,24,.55)" stroke="#fb7185" stroke-width="1.6"/></svg></span>bug</div>
+  <div class="ig-leg-row"><span class="ig-leg-sw"><svg width="14" height="14" viewBox="-8 -8 16 16"><path d="M0 -6 5.4 4.2 -5.4 4.2Z" fill="rgba(8,15,24,.55)" stroke="#fbbf24" stroke-width="1.6"/></svg></span>regression</div>
+  <div class="ig-leg-row"><span class="ig-leg-sw"><svg width="14" height="14" viewBox="-8 -8 16 16"><rect x="-4.8" y="-4.8" width="9.6" height="9.6" fill="rgba(8,15,24,.55)" stroke="#a78bfa" stroke-width="1.6"/></svg></span>merge conflict</div>
+  <div class="ig-leg-row"><span class="ig-leg-sw"><svg width="14" height="14" viewBox="-8 -8 16 16"><path d="M-6 -4 0 0 -6 4M0 -4 6 0 0 4" fill="none" stroke="#38e6ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>flaky test</div>
+</div>
+
+<!-- slim progression strip at the very bottom (rich breakdown lives in the Stats popover) -->
+<div class="ig-progress" id="ig-progress">
+  <span class="ig-prog-lv" id="ig-prog-lv">LV 0</span>
+  <div class="ig-prog-track"><div class="ig-prog-fill" id="ig-prog-fill" style="width:0%"></div></div>
+  <span class="ig-prog-xp" id="ig-prog-xp">XP 0%</span>
+</div>
+
+<!-- floating Shop / Stats / Dashboard / Kviz buttons + the Boss affordance, bottom-right -->
+<button class="ig-bossbtn" id="ig-bossbtn" type="button" title="Boss izazov — 20 pitanja">&#9876; Boss spreman</button>
+<button class="ig-quizbtn" id="ig-quizbtn" type="button" title="Otvori kviz">&#129504; Kviz <span class="ig-quizbtn-due" id="ig-quizbtn-due">0</span></button>
+<button class="ig-dashbtn" id="ig-dashbtn" type="button" title="Pregled — nadogradnje, nivo, rang, kviz, prihod">&#127918; Pregled</button>
+<button class="ig-statsbtn" id="ig-statsbtn" type="button" title="Rank, level & progression" aria-expanded="false">&#128202; Stats <span class="ig-statsbtn-lv" id="ig-statsbtn-lv">LV 0</span></button>
+<button class="ig-shopbtn" id="ig-shopbtn" type="button" title="Open the upgrade shop">&#128722; Shop <span class="ig-shopbtn-tok" id="ig-shopbtn-tok">0</span></button>
+
+<!-- Stats popover (opens above the Stats button). F2: rank line + prestige mult + knowledge are live. -->
+<div class="ig-stats-pop" id="ig-stats-pop" hidden role="dialog" aria-label="Progression">
+  <div class="ig-sp-rank"><span class="ig-sp-rankname" id="ig-sp-rank">Rang</span><span class="ig-sp-ranknum" id="ig-sp-ranknum">R0</span></div>
+  <div class="ig-sp-lv">Level <b id="ig-sp-lv">0</b></div>
+  <div class="ig-sp-xpbar"><div class="ig-sp-xpfill" id="ig-sp-xpfill" style="width:0%"></div></div>
+  <div class="ig-sp-xptext" id="ig-sp-xptext">0% &rarr; LV 1</div>
+  <div class="ig-sp-grid">
+    <div class="ig-sp-cell"><span class="v" id="ig-sp-income">&mdash;</span><span class="l">income /min</span></div>
+    <div class="ig-sp-cell"><span class="v" id="ig-sp-knowledge">&mdash;</span><span class="l">knowledge</span></div>
+    <div class="ig-sp-cell"><span class="v" id="ig-sp-lifetime">&mdash;</span><span class="l">lifetime</span></div>
+    <div class="ig-sp-cell"><span class="v" id="ig-sp-points">&mdash;</span><span class="l">points</span></div>
+  </div>
+  <div class="ig-sp-mult" id="ig-sp-mult">prihod &times;<b>1.00</b> &middot; prestige</div>
+</div>
+
+<!-- Shop modal (upgrades are data-driven from state.shop[]; the Prestige card is live in F2) -->
+<div class="ig-modal" id="ig-shop" hidden aria-modal="true" role="dialog" aria-label="Upgrade shop">
+  <div class="ig-modal-bd" data-close="shop"></div>
+  <div class="ig-modal-dlg">
+    <div class="ig-modal-head">
+      <h3>&#128722; Upgrades</h3>
+      <span class="ig-modal-cur">&#129689; <b id="ig-shop-tok">0</b> tokens</span>
+      <button class="ig-x" data-close="shop" aria-label="Close">&times;</button>
+    </div>
+    <div class="ig-modal-body" id="ig-shop-body"></div>
+  </div>
+</div>
+
+<!-- F3: Game Dashboard modal (rich visualization of everything the player owns). Body built by game.js. -->
+<div class="ig-modal" id="ig-dash" hidden aria-modal="true" role="dialog" aria-label="Pregled igre">
+  <div class="ig-modal-bd" data-close="dash"></div>
+  <div class="ig-modal-dlg ig-dash-dlg">
+    <div class="ig-modal-head">
+      <h3>&#127918; Pregled</h3>
+      <span class="ig-modal-cur" id="ig-dash-cur"></span>
+      <button class="ig-x" data-close="dash" aria-label="Close">&times;</button>
+    </div>
+    <div class="ig-modal-body" id="ig-dash-body"></div>
+  </div>
+</div>
+
+<!-- F2: Quiz card — spotlight (anti-phone) or quiet on-demand panel. Body built by game.js. -->
+<div class="ig-quiz-scrim" id="ig-quiz-scrim"></div>
+<div class="ig-quiz" id="ig-quiz" role="dialog" aria-label="Kviz">
+  <div class="ig-quiz-card">
+    <div class="ig-quiz-head">
+      <span class="ig-quiz-badge" id="ig-quiz-badge">&mdash;</span>
+      <span class="ig-quiz-htitle">Kviz</span>
+      <button class="ig-quiz-min" id="ig-quiz-min" type="button" title="Sakrij" aria-label="Sakrij">&minus;</button>
+    </div>
+    <div class="ig-quiz-body" id="ig-quiz-body"></div>
+    <div class="ig-quiz-foot">
+      <button class="ig-quiz-retire" id="ig-quiz-retire" type="button" title="Obri&#353;i / prijavi pitanje">&#128465; obri&#353;i</button>
+      <button class="ig-quiz-tags" id="ig-quiz-tags" type="button">teme</button>
+      <button class="ig-quiz-next" id="ig-quiz-next" type="button">slede&#263;e &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- F2: Boss run modal (reuses the .ig-modal shell). Body built by game.js. -->
+<div class="ig-modal" id="ig-boss" hidden aria-modal="true" role="dialog" aria-label="Boss izazov">
+  <div class="ig-modal-bd" data-close="boss"></div>
+  <div class="ig-modal-dlg">
+    <div class="ig-modal-head">
+      <h3>&#9876; Boss izazov</h3>
+      <span class="ig-modal-cur boss" id="ig-boss-cur"></span>
+      <button class="ig-x" data-close="boss" aria-label="Close">&times;</button>
+    </div>
+    <div class="ig-modal-body" id="ig-boss-body"></div>
+  </div>
+</div>
+
+<!-- F2: Tags settings modal (reuses the .ig-modal shell). Body built by game.js. -->
+<div class="ig-modal" id="ig-tags" hidden aria-modal="true" role="dialog" aria-label="Teme kviza">
+  <div class="ig-modal-bd" data-close="tags"></div>
+  <div class="ig-modal-dlg">
+    <div class="ig-modal-head">
+      <h3>&#127991; Teme kviza</h3>
+      <button class="ig-x" data-close="tags" aria-label="Close">&times;</button>
+    </div>
+    <div class="ig-modal-body" id="ig-tags-body"></div>
+  </div>
+</div>
+
+<div class="ig-toast" id="ig-toast"></div>
+
+<!-- ================= TABLE ================= -->
+<div id="view-table">
+  <div class="tabs" id="tabs"></div>
+  <div class="wrap">
+    <div id="panel"></div>
+    <div class="empty" id="empty">
+      <b>No active sessions</b>
+      Start Claude Code &mdash; the moment an agent runs, a tab appears here.<br>
+      The server listens for events on <code>POST /event</code>.
+    </div>
+  </div>
+</div>
+
+<!-- ================= DASHBOARD ================= -->
+<div id="view-dash">
+  <div class="dwrap">
+    <div class="deyebrow">brain &middot; incorporated dashboard</div>
+    <div class="dtitle">Dashboard</div>
+    <div class="dsub">Everything from dashboard.html &mdash; live, in the HUD's language. <span id="dupd" style="color:var(--cy)"></span></div>
+    <div id="dash-body"><div class="dloading">Loading dashboard data&hellip;</div></div>
+  </div>
+</div>
+
+<!-- ================= FLOW ================= -->
+<div id="view-flow"><div id="flow-body"></div></div>
+
+<div id="view-tickets">
+  <div class="tk-head"><h1>Tickets</h1><span class="sub" id="tk-sub"></span></div>
+  <div class="tk-filters">
+    <div class="tk-fg tk-fg-mod"><span class="lab">Module</span><span id="tk-fmod" class="tk-strip"></span></div>
+    <div class="tk-fg"><span class="lab">Category</span><span id="tk-fcat"></span></div>
+    <div class="tk-fg"><span class="lab">Status</span><span id="tk-fstat"></span></div>
+    <input class="tk-search" id="tk-search" placeholder="search id / title&hellip;">
+    <span style="flex:1"></span>
+    <button class="btn" id="tk-mapbtn" title="map each module to a repo folder on disk">&#128193; repos</button>
+    <button class="btn" id="tk-refresh" title="Helpdesk sync (pull active, close both ways), then Gemini triage, then re-read the store">&#8635; rescan</button>
+  </div>
+  <div class="tk-modmap" id="tk-modmap"></div>
+  <div class="tk-bulk" id="tk-bulk"><b id="tk-bulkn">0</b> selected &middot; set triage
+    <select class="tk-sel" id="tk-bulkstate"><option value="">&mdash;</option><option>working_today</option><option>ignore_today</option><option>ignore_indefinitely</option><option>solved_manually</option><option>nonsense</option><option>done</option></select>
+    <span style="flex:1"></span><button class="btn" id="tk-clear">clear</button></div>
+  <div class="tk-tablewrap"><table class="tk-table"><thead><tr>
+    <th><input type="checkbox" class="tk-cbx" id="tk-allcbx"></th><th>ID</th><th>Title</th><th>Opened by</th><th class="srt" data-sort="module">Module</th><th class="srt" data-sort="category">Category</th><th class="srt" data-sort="priority">Priority</th><th class="srt" data-sort="created">Created</th><th class="srt" data-sort="deadline">Deadline</th><th class="srt" data-sort="est" title="procena / stvarno (h)">h</th><th class="srt" data-sort="comments" title="comments">&#128172;</th><th>Status</th><th>Triage</th><th>AI</th>
+  </tr></thead><tbody id="tk-rows"></tbody></table></div>
+  <div class="tk-empty" id="tk-empty" style="display:none"></div>
+</div>
+<div id="tixmodal"><div class="bd" id="tix-bd"></div><div class="dlg">
+  <div class="dh"><span class="tk-id" id="tix-id"></span><h3 id="tix-title"></h3><a class="tix-hd" id="tix-open" target="_blank" rel="noopener" style="display:none">Open in helpdesk &#8599;</a><span class="x" id="tix-x">&times;</span></div>
+  <div class="db" id="tix-body"></div>
+</div></div>
+
+<!-- ================= BRAIN LOG ================= -->
+<div id="view-brain">
+  <div class="bl-head"><h1>Brain log</h1><span class="sub" id="bl-sub"></span></div>
+  <div class="bl-filters">
+    <input class="bl-search" id="bl-search" placeholder="filter by skill / agent name&hellip;">
+    <span style="flex:1"></span>
+    <button class="btn" id="bl-refresh" title="reload the brain changelog">&#8635; refresh</button>
+  </div>
+  <div class="bl-tablewrap"><table class="bl-table"><thead><tr>
+    <th>Date</th><th>Time</th><th>Skill</th><th>Description</th>
+  </tr></thead><tbody id="bl-rows"></tbody></table></div>
+  <div class="bl-empty" id="bl-empty" style="display:none"></div>
+</div>
+
+<!-- ================= GIT ================= -->
+<div id="view-git">
+  <div class="git-head">
+    <h1><svg class="gi" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="4" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="6" r="1.6"/><path d="M4 5.6v4.8M4 8h4a2 2 0 0 0 2-2V7.6"/></svg> Git</h1>
+    <span class="sub" id="git-sub"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="git-refresh" title="reload the selected repository">&#8635; refresh</button>
+  </div>
+  <div class="git-note" id="git-note" style="display:none"></div>
+  <div id="git-shell">
+    <div class="git-layout">
+      <div class="git-sidebar">
+        <div class="git-side-h">Repositories<span class="cnt" id="git-repocount"></span>
+          <button class="git-side-hide" id="git-side-hide" type="button" title="hide the sidebar — the repo list moves to a collapsible strip at the bottom so the insights use the full width">&#10094; hide</button></div>
+        <div class="git-side-hint">Only pinned <span class="st">&#9733;</span> and active repos refresh live &mdash; click a repo to refresh it.</div>
+        <div id="git-repos"></div>
+      </div>
+      <!-- MAIN column: metrics + insights are PRIMARY (top); the commit-graph DAG is demoted below.
+           The repo sidebar (left) still drives the whole column via gitSel. -->
+      <div class="git-main">
+        <div class="git-metrics" id="git-metrics"></div>
+        <!-- ===== PRIMARY — INSIGHTS: 3D orbital + terrain hero, then 2D analytics =====
+             Two canvas-2D scenes (no libs). rAF gated in JS to mode==="git" + visible +
+             section-open — copied frame-for-frame from the Production reactor/globe. -->
+        <div class="git-insights" id="git-insights">
+          <div class="git-ins-head">
+            <button class="git-ins-toggle" id="git-ins-toggle" type="button" aria-expanded="true" title="repository insights — heatmap, contributors, churn, hotspots, file types">&#9662; Insights</button>
+            <span class="git-ins-sub" id="git-ins-sub"></span>
+          </div>
+          <div class="git-ins-body" id="git-ins-body">
+            <div class="git-hero">
+              <div class="git-orbit-wrap"><canvas id="git-orbit"></canvas>
+                <div class="git-scene-cap"><span class="gsc-title">&#9883; Repo orbital</span><span class="gsc-sub" id="git-orbit-cap"></span></div></div>
+              <div class="git-terrain-wrap"><canvas id="git-terrain"></canvas>
+                <div class="git-scene-cap violet"><span class="gsc-title">&#9968; Commit terrain</span><span class="gsc-sub" id="git-terrain-cap"></span></div></div>
+              <div class="git-terrain2-wrap"><canvas id="git-terrain2"></canvas>
+                <div class="git-scene-cap"><span class="gsc-title">&#9650; Relief field</span><span class="gsc-sub" id="git-terrain2-cap"></span></div></div>
+            </div>
+            <div class="git-ins-grid">
+              <div class="gin-panel gin-heatmap"><div class="gin-h">&#128197; Commit heatmap &middot; all repos<span class="cnt" id="git-heat-cnt"></span></div><div class="gin-b" id="git-heatmap"></div></div>
+              <div class="gin-panel"><div class="gin-h">&#128101; Contributors<span class="cnt" id="git-contrib-cnt"></span></div><div class="gin-b" id="git-contributors"></div></div>
+              <div class="gin-panel"><div class="gin-h">&#128193; File types<span class="cnt" id="git-ft-cnt"></span></div><div class="gin-b" id="git-filetypes"></div></div>
+              <div class="gin-panel gin-churn"><div class="gin-h">&#128200; Code churn<span class="cnt">weekly</span></div><div class="gin-b" id="git-churn"></div></div>
+              <div class="gin-panel gin-hotspots"><div class="gin-h">&#128293; Hotspots<span class="cnt" id="git-hot-cnt"></span></div><div class="gin-b" id="git-hotspots"></div></div>
+            </div>
+          </div>
+        </div>
+        <!-- ===== SECONDARY — commit-graph DAG + branch/PR panels (demoted below insights, collapsible) ===== -->
+        <div class="git-secondary" id="git-secondary">
+          <div class="git-sec-head">
+            <button class="git-sec-toggle" id="git-graph-toggle" type="button" aria-expanded="true" title="commit graph &amp; branch / PR panels">&#9662; Commit graph &amp; branches</button>
+            <span class="git-sec-hint">the DAG &amp; branch / PR detail</span>
+          </div>
+          <div class="git-sec-body" id="git-graph-secbody">
+            <div class="git-detail-grid">
+              <div class="git-graphwrap">
+                <div class="git-graph-h" id="git-graph-h">Commit graph</div>
+                <div class="git-graph-scroll" id="git-graph-scroll"><div class="git-loading">Loading&hellip;</div></div>
+              </div>
+              <div class="git-panels" id="git-panels"></div>
+            </div>
+          </div>
+        </div>
+        <!-- ===== BOTTOM REPO STRIP — only shown when the sidebar is HIDDEN; a collapsible strip
+             below all git content. Renders the SAME repo cards as the sidebar (select works here). ===== -->
+        <div class="git-repostrip" id="git-repostrip">
+          <div class="git-sec-head">
+            <button class="git-sec-toggle" id="git-strip-toggle" type="button" aria-expanded="false" title="the repository list (sidebar is hidden)">&#9656; Repositories</button>
+            <span class="git-sec-hint"><span class="cnt" id="git-repocount-strip"></span> repositories &mdash; click one to select</span>
+            <span class="spacer"></span>
+            <button class="btn" id="git-side-show" type="button" title="restore the repo sidebar">&#10095; show sidebar</button>
+          </div>
+          <div class="git-sec-body" id="git-strip-body" style="display:none">
+            <div class="git-repostrip-grid" id="git-repos-strip"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PRODUCTION ================= -->
+<div id="view-prod">
+  <div class="prod-head">
+    <h1>&#128421; Production</h1>
+    <span class="sub" id="prod-sub"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="prod-refresh" title="reload live VPS metrics">&#8635; refresh</button>
+  </div>
+  <div class="git-note" id="prod-note" style="display:none"></div>
+  <div id="prod-shell">
+    <!-- LIVE 3D hero: the VPS core + its monitored apps as orbiting nodes (canvas 2D, no libs) -->
+    <div class="prod-reactor" id="prod-reactor-wrap">
+      <canvas id="prod-reactor"></canvas>
+      <div class="prod-reactor-cap"><span class="prc-title">&#9883; VPS Reactor</span><span class="prc-sub" id="prod-reactor-sub"></span></div>
+    </div>
+    <!-- ALERTS: "what needs attention" — derived from the current overview each render -->
+    <div class="prod-alerts">
+      <div class="prod-cont-head" id="prod-alerts-head">What needs attention</div>
+      <div id="prod-alerts"></div>
+    </div>
+    <div class="prod-sysgrid" id="prod-system"></div>
+    <div class="prod-net" id="prod-net"></div>
+    <!-- RESOURCE HISTORY: CPU / MEM / DISK trend area charts (client-side ring buffer) -->
+    <div class="prod-cont-head" id="prod-reshist-head">Resource history <span class="pc-sum">recent trend</span></div>
+    <div class="prod-reshist" id="prod-reshist"></div>
+    <div class="prod-cont-head" id="prod-health-head" style="display:none"></div>
+    <div class="prod-health-grid" id="prod-health"></div>
+    <!-- LATENCY & UPTIME: per-app sparkline + uptime ribbon (client-side ring buffer) -->
+    <div class="prod-cont-head" id="prod-lat-head" style="display:none"></div>
+    <div class="prod-latgrid" id="prod-lat"></div>
+    <div class="prod-cont-head" id="prod-cont-head"></div>
+    <div id="prod-containers"></div>
+    <div class="prod-traffic" id="prod-traffic">
+      <div class="prod-traffic-bar">
+        <button class="btn prod-traffic-toggle" id="prod-traffic-toggle" aria-expanded="false" title="site traffic — loads on demand (heavier than the live metrics)">&#9656; Traffic</button>
+        <label class="prod-traffic-sitewrap" id="prod-traffic-sitewrap" style="display:none">
+          <span class="prod-traffic-sitelab">site</span>
+          <select class="prod-sel" id="prod-traffic-site" aria-label="traffic site"></select>
+        </label>
+        <button class="btn" id="prod-traffic-refresh" title="reload traffic stats" style="display:none">&#8635; refresh</button>
+      </div>
+      <!-- LIVE 3D holo globe: visitor origins as arcs from home; sibling of the body so its
+           rAF canvas is never wiped by prodRenderVisits' innerHTML rebuild -->
+      <div class="prod-globe-wrap" id="prod-globe-wrap" style="display:none">
+        <canvas id="prod-globe"></canvas>
+        <div class="prod-globe-cap" id="prod-globe-cap">&#127760; Visitor origins</div>
+      </div>
+      <div class="prod-traffic-body" id="prod-traffic-body" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MAIL ================= -->
+<div id="view-mail">
+  <div id="mail-topbar">
+    <span class="mtb-title">&#9993; Mail</span>
+    <button class="mail-tbtn" id="mail-triage-toggle" title="Scan unread in this folder and tell me what to look at first">&#9873; Triage inbox</button>
+    <button class="mail-tbtn" id="mail-ask-toggle" title="AI search across your mail">&#128172; Ask AI</button>
+    <button class="mail-tbtn" id="mail-stil-toggle" title="writing style / profiles">&#9998; Writing style</button>
+    <span class="mtb-spacer"></span>
+    <label class="mtb-voice" title="voice used for Read aloud">
+      <span class="mtb-vlab">&#128266; Voice</span>
+      <select class="mail-voicesel" id="mail-voicesel" aria-label="Read-aloud voice"></select>
+      <span class="mtb-vhint" id="mail-voicehint" style="display:none"></span>
+    </label>
+  </div>
+  <section id="mail-left">
+    <div class="mail-lhead">
+      <select class="mail-acct" id="mail-acct" title="account"></select>
+      <button class="mail-newbtn" id="mail-compose">&#9998; New message</button>
+    </div>
+    <div class="mail-folders" id="mail-folders"><div class="mail-load">Loading&hellip;</div></div>
+    <div class="mail-lfoot"><button class="mail-syncbtn" id="mail-syncall" title="Sync every folder from the server (after moving Outlook history into the server Archive)">&#8635; Sync all folders</button></div>
+  </section>
+  <section id="mail-mid">
+    <div class="mail-mhead">
+      <input class="mail-search" id="mail-search" placeholder="search from / subject&hellip;">
+      <div class="mail-sortrow"><span class="lab">Sort</span>
+        <select class="mail-sort" id="mail-sort">
+          <option value="date">Date (newest)</option>
+          <option value="from">Sender</option>
+          <option value="subject">Subject</option>
+          <option value="unread">Unread first</option>
+        </select></div>
+    </div>
+    <div class="mail-list" id="mail-list"><div class="mail-empty2">&mdash;</div></div>
+  </section>
+  <section id="mail-read">
+    <div class="mail-empty"><b>No message selected</b>Pick a message from the list.</div>
+  </section>
+</div>
+
+<!-- compose overlay (bottom-right); confirm() gates the actual send -->
+<div id="mail-compose-panel">
+  <div class="mc-head"><h3>New message</h3><span class="x" id="mail-compose-x">&times;</span></div>
+  <div class="mc-body">
+    <div class="mc-assist">
+      <textarea class="mc-assist-in" id="mail-assist-in" placeholder="Write what you mean — rough intent, a few words or bullet points…"></textarea>
+      <div class="mc-assist-row"><button class="mc-assist-btn" id="mail-assist-btn">&#10024; Draft professionally</button><span class="mc-assist-hint">Fills Subject + Body with a professional draft &mdash; you review &amp; send.</span></div>
+    </div>
+    <div class="mc-field"><span class="mc-lab">To</span><span class="mc-chips" id="mail-to-chips"></span><input class="mc-recip-in" id="mail-to-in" placeholder="recipient@&hellip;" autocomplete="off"></div>
+    <div class="mc-field"><span class="mc-lab">Cc</span><span class="mc-chips" id="mail-cc-chips"></span><input class="mc-recip-in" id="mail-cc-in" placeholder="cc@&hellip;" autocomplete="off"></div>
+    <input class="mc-in" id="mail-subj-in" placeholder="Subject" autocomplete="off">
+    <textarea class="mc-textarea" id="mail-body-in" placeholder="Message&hellip;"></textarea>
+    <div class="mc-visual" id="mail-visual">
+      <div class="mc-visual-head">&#127912; AI visual</div>
+      <div class="mc-visual-row">
+        <input class="mc-visual-in" id="mail-visual-in" placeholder="describe a diagram or image&hellip;" autocomplete="off">
+        <button class="mc-visual-btn" id="mail-visual-diagram" type="button">Diagram</button>
+        <button class="mc-visual-btn" id="mail-visual-image" type="button">Image</button>
+      </div>
+      <div class="mc-visual-preview" id="mail-visual-preview" hidden>
+        <img class="mc-visual-img" id="mail-visual-img" alt="AI visual preview">
+        <div class="mc-visual-actions">
+          <button class="mc-visual-attach" id="mail-visual-attach" type="button">&#128206; Attach to email</button>
+          <span class="mc-visual-kind" id="mail-visual-kind"></span>
+        </div>
+      </div>
+    </div>
+    <div class="mc-fchips" id="mail-file-chips"></div>
+  </div>
+  <div class="mc-note">This message is sent from the selected account to real recipients &mdash; we ask for confirmation before sending.</div>
+  <div class="mc-foot">
+    <label class="mc-attach">&#128206; Attach<input type="file" id="mail-file-in" multiple hidden></label>
+    <span style="flex:1"></span>
+    <button class="mc-send" id="mail-send">Send</button>
+  </div>
+</div>
+<div id="mail-flash"></div>
+<div id="mail-toast"></div>
+
+<!-- side-chat: ask AI across your mail -->
+<div id="mail-ask-panel">
+  <div class="mp-head"><h3>&#128172; Ask AI (search your mail)</h3><span class="x" id="mail-ask-x">&times;</span></div>
+  <div class="mp-body" id="mail-ask-body"><div class="mp-hint">Ask a question about your mail &mdash; e.g. &bdquo;find my credentials for the fasper FTP&ldquo;.</div></div>
+  <div class="mp-foot">
+    <input class="mp-in" id="mail-ask-in" placeholder="Question&hellip;" autocomplete="off">
+    <button class="mp-send" id="mail-ask-send">Ask</button>
+  </div>
+</div>
+
+<!-- triage: "what needs my attention" — unread scan of the current folder -->
+<div id="mail-triage-panel">
+  <div class="mp-head"><h3>&#9873; What needs my attention?</h3><span class="x" id="mail-triage-x">&times;</span></div>
+  <div class="mp-body" id="mail-triage-body"><div class="mp-hint">Scanning unread mail&hellip;</div></div>
+  <div class="mp-foot"><span class="mtb-spacer"></span><button class="mp-send" id="mail-triage-rerun">&#8635; Re-run</button></div>
+</div>
+
+<!-- stil pisanja: learned writing profiles -->
+<div id="mail-stil-panel">
+  <div class="mp-head"><h3>&#9998; Writing style</h3><span class="x" id="mail-stil-x">&times;</span></div>
+  <div class="mp-body" id="mail-stil-body"><div class="mp-hint">Loading&hellip;</div></div>
+  <div class="mp-foot">
+    <span class="mtb-spacer"></span>
+    <button class="mp-send" id="mail-stil-refresh">&#8635; Refresh style</button>
+  </div>
+</div>
+
+<!-- ================= PROFILE (focus/wellness stats over history[]) ================= -->
+<div id="view-profile">
+  <div class="pf-head">
+    <h1>&#128202; Profil</h1>
+    <span class="sub" id="pf-sub"></span>
+    <span class="spacer"></span>
+    <!-- Sub-page switchers (NOT nav-bar tabs — they swap #view-profile's main content).
+         Click again on the active one returns to Statistika; each page also renders a back link. -->
+    <button class="btn" id="pf-prod-btn" title="produktivnost — analitika po danu">&#128202; Produktivnost</button>
+    <button class="btn" id="pf-rpg-btn" title="RPG karakter">&#127918; Karakter</button>
+    <!-- Settings ⚙ was removed here: the pilula stats-dropdown "Podešavanja" (#fpop-settings)
+         already opens the same #focus-smodal modal, so a second entry point was redundant. -->
+    <button class="btn" id="pf-refresh" title="ponovo u&#269;itaj (osve&#382;i aktivnu stranicu)">&#8635; osve&#382;i</button>
+  </div>
+  <div id="pf-body"><div class="git-loading">U&#269;itavanje statistike&hellip;</div></div>
+  <!-- Profil sub-pages: hidden by default; productivity.js / rpg.js build into these. -->
+  <div id="pf-prod-view" style="display:none"></div>
+  <div id="pf-rpg-view" style="display:none"></div>
+</div>
+
+<!-- ================= CALENDAR ================= -->
+<!-- Full-viewport HUD segment; calendar.js drives it, calendar.css scopes every rule
+     under #view-calendar. The modal / scope-chooser / toast live INSIDE this view so
+     they hide with the tab and their position:fixed re-bases to the viewport (this
+     wrapper carries no transform/filter, so fixed children are not re-based). -->
+<div id="view-calendar">
+  <div class="cal-head">
+    <h1>&#128197; Kalendar <span class="sub">predstojeće &amp; ponavljanja</span></h1>
+    <span class="spacer"></span>
+    <div class="seg" id="cal-views">
+      <button data-v="month" class="on">Mesec</button>
+      <button data-v="week">Nedelja</button>
+      <button data-v="day">Dan</button>
+    </div>
+    <button class="btn" id="cal-today">Danas</button>
+    <button class="btn" id="cal-prev" title="prethodni" aria-label="prethodni period">&#8249;</button>
+    <div class="cal-mlabel" id="cal-mlabel"></div>
+    <button class="btn" id="cal-next" title="sledeći" aria-label="sledeći period">&#8250;</button>
+  </div>
+
+  <!-- Gemini bar — Phase-3 wires the NL; disabled stub for now. -->
+  <div class="cal-gbar" id="cal-gbar" aria-disabled="true">
+    <div class="cal-gi">&#128302;</div>
+    <input id="cal-gin" disabled placeholder="Reci Gemini-ju: &bdquo;zaka&#382;i sastanak sutra u 15h&ldquo; &mdash; prirodni jezik sti&#382;e uskoro">
+    <span class="cal-soon">uskoro</span>
+    <button class="cal-gsend" id="cal-gsend" disabled title="Prirodni jezik sti&#382;e u Fazi 3">Po&#353;alji</button>
+  </div>
+
+  <div class="cal-layout">
+    <div class="cal-surface" id="cal-body"></div>
+    <aside class="cal-rail">
+      <h3>&#9197; Predstoje&#263;e</h3>
+      <div class="cal-uplist" id="cal-upcoming"></div>
+      <button class="btn cal-p cal-addbtn" id="cal-addbtn">+ Novi doga&#273;aj</button>
+    </aside>
+  </div>
+
+  <!-- create / edit modal (the overlay IS the fixed layer; .cal-dlg is flow-centered) -->
+  <div class="cal-ov" id="cal-ov">
+    <div class="cal-dlg" role="dialog" aria-modal="true" aria-labelledby="cal-dlgtitle">
+      <h2 id="cal-dlgtitle">Novi doga&#273;aj <span class="x" id="cal-dlgx" role="button" tabindex="0" aria-label="Zatvori">&#10005;</span></h2>
+      <div class="cal-fld"><label for="cal-f-title">Naslov</label><input id="cal-f-title" placeholder="npr. Sastanak sa timom"></div>
+      <div class="cal-row2">
+        <div class="cal-fld"><label for="cal-f-date">Datum</label><input type="date" id="cal-f-date"></div>
+        <div class="cal-fld"><label>&nbsp;</label><label class="cal-chk"><input type="checkbox" id="cal-f-allday"> Ceo dan</label></div>
+      </div>
+      <div class="cal-row2" id="cal-timerow">
+        <div class="cal-fld"><label for="cal-f-start">Od</label><input type="time" id="cal-f-start" value="09:00"></div>
+        <div class="cal-fld"><label for="cal-f-end">Do</label><input type="time" id="cal-f-end" value="10:00"></div>
+      </div>
+      <div class="cal-fld"><label>Kategorija</label><div class="cal-cats" id="cal-cats"></div></div>
+
+      <!-- recurrence editor (create only). On edit we hide this and show the badge below. -->
+      <div id="cal-recur-editor">
+        <div class="cal-fld"><label for="cal-f-freq">Ponavljaj</label>
+          <select id="cal-f-freq">
+            <option value="none">ne</option>
+            <option value="daily">dnevno</option>
+            <option value="weekly">nedeljno</option>
+            <option value="monthly">mese&#269;no</option>
+            <option value="yearly">godi&#353;nje</option>
+          </select>
+        </div>
+        <div class="cal-rec" id="cal-rec" hidden>
+          <div class="cal-fld" id="cal-byday-fld" hidden>
+            <label>Dani u nedelji</label>
+            <div class="cal-byday" id="cal-byday"></div>
+          </div>
+          <div class="cal-row2">
+            <div class="cal-fld"><label for="cal-f-end-mode">Zavr&#353;i</label>
+              <select id="cal-f-end-mode">
+                <option value="never">nikad</option>
+                <option value="until">do datuma</option>
+                <option value="count">N puta</option>
+              </select>
+            </div>
+            <div class="cal-fld" id="cal-until-fld" hidden><label for="cal-f-until">Datum kraja</label><input type="date" id="cal-f-until"></div>
+            <div class="cal-fld" id="cal-count-fld" hidden><label for="cal-f-count">Broj ponavljanja</label><input type="number" id="cal-f-count" min="1" value="10"></div>
+          </div>
+          <div class="cal-rrule-preview" id="cal-rrule-preview"></div>
+        </div>
+      </div>
+      <div class="cal-fld" id="cal-rec-badge" hidden><label>Ponavljanje</label><div class="cal-rrule-preview">&#8635; Ponavljaju&#263;i doga&#273;aj</div></div>
+
+      <div class="cal-fld"><label for="cal-f-notes">Bele&#353;ka</label><textarea id="cal-f-notes" rows="2" placeholder="opciono&#8230;"></textarea></div>
+      <div class="cal-dlgact">
+        <button class="btn del" id="cal-f-del" hidden>Obri&#353;i</button>
+        <button class="btn" id="cal-f-cancel">Otka&#382;i</button>
+        <button class="btn cal-p" id="cal-f-save">Sa&#269;uvaj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- scope chooser for a recurring occurrence (this / all) -->
+  <div class="cal-ov" id="cal-scope-ov">
+    <div class="cal-dlg cal-scope-dlg" role="dialog" aria-modal="true" aria-labelledby="cal-scope-title">
+      <h2 id="cal-scope-title">Ponavljaju&#263;i doga&#273;aj <span class="x" id="cal-scope-x" role="button" tabindex="0" aria-label="Zatvori">&#10005;</span></h2>
+      <p class="cal-scope-msg" id="cal-scope-msg"></p>
+      <div class="cal-dlgact">
+        <button class="btn" id="cal-scope-cancel">Otka&#382;i</button>
+        <button class="btn" id="cal-scope-this">Ova instanca</button>
+        <button class="btn cal-p" id="cal-scope-all">Ceo niz</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cal-toast" id="cal-toast" role="status" aria-live="polite"></div>
+</div>
+
+<canvas id="mini"></canvas>
+<div class="zc"><span class="zread" id="zread">80%</span><div class="zbtns"><button id="zin">+</button><button id="zout">&minus;</button></div><button class="rc" id="rc">&#9096; recenter</button></div>
+<div id="tip"></div>
+<div id="insp"><span class="x" id="insp-x">&times;</span><div id="insp-body"></div></div>
+<div id="docmodal"><div class="dbd" id="doc-bd"></div><div class="ddlg">
+  <div class="dmh"><span id="doc-ico"></span><span class="tt" id="doc-tt"></span><span class="x" id="doc-x">&times;</span></div>
+  <div class="dmsub" id="doc-sub"></div>
+  <div class="dmb md" id="doc-body"></div>
+  <div class="dmf"><span class="pos" id="doc-pos"></span><button id="doc-prev">&lsaquo; prev</button><button id="doc-next">next &rsaquo;</button></div>
+</div></div>
+
+<!-- non-blocking AI activity loader (right edge, pointer-events:none — page stays interactive) -->
+<div id="ai-loader">
+  <div class="ail-title">AI working</div>
+  <div class="ail-ring"></div>
+  <div class="ail-ops" id="ai-loader-ops"></div>
+  <div class="ail-note">page stays interactive</div>
+</div>
+
+<!-- discoverable Ask-Claude entry (top bar button opens this) -->
+<div id="claude-panel">
+  <div class="cl-head"><h3>&#129302; Ask Claude</h3><span class="x" id="claude-x">&times;</span></div>
+  <div class="cl-body">
+    <div class="cl-hint">Launch a Claude session with a prompt. It runs in a terminal on this machine.</div>
+    <textarea class="cl-in" id="claude-in" placeholder="What should Claude do?&hellip;"></textarea>
+  </div>
+  <div class="cl-foot"><span class="cl-status" id="claude-status"></span><button class="cl-send" id="claude-send">Launch session</button></div>
+</div>
+
+<!-- F6 GLASOVNA KOMANDA - the Ask-Claude panel's chrome (.cl-head/.cl-body/.cl-foot, one rule
+     for both ids in app.css), with the step list as the only new part. Never open at the same
+     time as #claude-panel: same position, same z-index. No <select> and no dropdown lives in
+     here, so nothing needs to escape a clipping ancestor. -->
+<div id="voice-panel" role="dialog" aria-label="Glasovna komanda">
+  <div class="cl-head"><h3>&#127908; Glasovna komanda</h3><span class="x" id="voice-x" title="Zatvori (Esc)">&times;</span></div>
+  <div class="cl-body">
+    <div class="cl-hint" id="voice-hint"></div>
+    <div class="vc-row">
+      <button class="vc-btn" id="voice-listen" type="button" title="Ctrl+Shift+Space">Slusaj</button>
+      <button class="vc-btn" id="voice-lang" type="button" title="Jezik prepoznavanja">sr-RS</button>
+      <span class="cl-status" id="voice-status"></span>
+    </div>
+    <!-- The transcript stays EDITABLE and is what gets sent. A textarea cannot grey out part
+         of its own value, so the interim (not-yet-final) words live in the dim line below it
+         and are never written into the box until the browser marks them final. -->
+    <textarea class="cl-in vc-in" id="voice-text" spellcheck="false"
+              placeholder="Izgovori ili upisi komandu&hellip; (Ctrl+Enter = posalji Gemini-ju)"></textarea>
+    <div class="vc-interim" id="voice-interim"></div>
+    <div class="vc-steps" id="voice-steps"></div>
+  </div>
+  <div class="cl-foot">
+    <span class="cl-status" id="voice-foot">Nista se ne izvrsava bez klika.</span>
+    <button class="vc-btn" id="voice-plan" type="button">Posalji Gemini-ju</button>
+    <button class="cl-send" id="voice-run" type="button" disabled>Izvrsi oznacene</button>
+  </div>
+</div>
+
+<!-- full-prompt modal (flow prompt + dashboard per-request rows) -->
+<div id="promptmodal"><div class="pbd" id="prompt-bd"></div><div class="pdlg">
+  <div class="ph"><span class="tt">full prompt</span><span class="x" id="prompt-x">&times;</span></div>
+  <div class="pbody" id="prompt-body"></div>
+</div></div>
+
+<!-- Focus STATS dropdown — fixed; JS positions it under the pilula so the top bar's overflow
+     never clips it. Read-only "today" panel (score + counters); ALL config moved to Profil. -->
+<div class="focus-pop" id="focus-pop" role="dialog" aria-label="Fokus — dana&#353;nja statistika">
+  <div class="fpop-head">&#127919; Danas</div>
+  <div class="fstat-body" id="focus-statbody"></div>
+  <!-- Claude plan limit (session / week, time to reset) -- usage.js renders it when the
+       popover opens; the popover also opens on hover over the pilula. -->
+  <div class="fpop-claude" id="fpop-claude" hidden></div>
+  <div class="fpop-foot">
+    <!-- idle-game enable/disable — a variant of the fpop-foot buttons; label set by game.js -->
+    <button class="fpop-game" id="ig-toggle" type="button" aria-pressed="false">&#127918; Idle igra</button>
+    <!-- idle-game SETTINGS entry (quiz topics) — the only game config that lives outside the HUD
+         overlay's own modals; CSS-shown only while the overlay is active (body.game-on). -->
+    <button class="fpop-gametags" id="ig-tagsbtn" type="button">&#127919; Kviz teme</button>
+    <button class="fpop-endday" id="fpop-endday" type="button">&#127881; Kraj dana</button>
+    <button class="fpop-settings" id="fpop-settings" type="button">&#9881; Pode&#353;avanja</button>
+  </div>
+</div>
+
+<!-- Non-blocking wellness reminder cards (bottom-right stack; container is pointer-events:none so the page stays usable) -->
+<div id="focus-cards" aria-live="polite"></div>
+
+<!-- Centered PAUSE overlay — a full-viewport fixed layer (itself the backdrop, so its
+     backdrop-filter never re-bases a fixed child); click the button OR the backdrop to resume. -->
+<div id="focus-pause-ov" class="focus-pause-ov" role="dialog" aria-label="Pauza" hidden>
+  <div class="fpo-card">
+    <div class="fpo-label">PAUZA</div>
+    <button class="fpo-resume" id="focus-resume" type="button">&#9654; Nastavi</button>
+    <div class="fpo-hint">klikni bilo gde da nastavi&#353;</div>
+  </div>
+</div>
+
+<!-- Day-ended report + modal. Shown on EVERY load while session.day_ended is true (driven
+     from focusApply, not just the end-day click). Blinking card → "Novi dan" / "Ugasi server". -->
+<div id="focus-dayend" class="focus-dayend" role="dialog" aria-label="Kraj radnog dana" hidden>
+  <div class="fde-card">
+    <div class="fde-head">&#127881; Kraj radnog dana <span class="fde-date" id="fde-date"></span></div>
+    <div class="fde-body" id="fde-body"></div>
+    <div class="fde-acts">
+      <button class="fde-newday" id="focus-newday" type="button">&#9728; Novi dan</button>
+      <button class="fde-shutdown" id="focus-shutdown" type="button">&#9211; Ugasi server</button>
+    </div>
+  </div>
+</div>
+
+<!-- Focus settings MODAL — full-viewport centered overlay hosting #focus-settings. Opened from the
+     Profil header ⚙ button and the pilula stats-dropdown Podešavanja. The overlay IS the backdrop
+     (click outside .fsm-dlg closes; × / Esc also close). The dialog surface uses CHROME tokens
+     because the .fpop-*/.fpx-* rows inside are chrome-token and flip with the theme. focus.js
+     (focusBuildSettings) builds the 5 sections into #focus-settings — ONE implementation. -->
+<div id="focus-smodal" class="focus-smodal" role="dialog" aria-modal="true" aria-label="Pode&#353;avanja fokusa i wellness-a" hidden>
+  <div class="fsm-dlg" role="document">
+    <div class="fsm-head">
+      <span class="fsm-title">&#9881; Pode&#353;avanja &mdash; fokus &amp; wellness</span>
+      <button class="fsm-x" id="fsm-x" type="button" aria-label="Zatvori" title="Zatvori (Esc)">&times;</button>
+    </div>
+    <div class="fsm-body">
+      <div class="focus-settings" id="focus-settings"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Page-level status line. The calendar has its own toast scoped to its
+     view; this one works on every tab, which is what a refusal on the
+     tickets tab needs. -->
+<div class="hud-toast" id="hud-toast" role="status" aria-live="polite"></div>
+
+<script src="core.js"></script>
+<script src="voice.js"></script>
+<script src="focus.js"></script>
+<script src="usage.js"></script>
+<script src="table.js"></script>
+<script src="sessions.js"></script>
+<script src="dashboard.js"></script>
+<script src="flow.js"></script>
+<script src="tickets.js"></script>
+<script src="brainlog.js"></script>
+<script src="git.js"></script>
+<script src="prod.js"></script>
+<script src="mail.js"></script>
+<script src="profile.js"></script>
+<script src="productivity.js"></script>
+<script src="rpg.js"></script>
+<script src="calendar.js"></script>
+<script src="game.js"></script>
+<!-- Before boot.js: setMode() asks this whether a view may render at all. -->
+<script src="setup.js"></script>
+<script src="boot.js"></script>
+</body>
+</html>

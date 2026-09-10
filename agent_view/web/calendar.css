@@ -1,0 +1,271 @@
+/* ===================== CALENDAR VIEW =====================
+   A HUD segment (always-dark). Every selector is scoped under #view-calendar so
+   nothing leaks to another screen; every calendar-specific class is cal-prefixed
+   so it can never collide with a global (.grid/.cell/.ev/.rail/.toast all exist
+   elsewhere). Buttons + the Mesec/Nedelja/Dan switcher REUSE the house .btn/.seg
+   components (like the Git/Prod tabs do) — only a scoped .cal-p primary is added.
+
+   Colours come from the HUD token family (--cy/--violet/--acc/--warn/--bad +
+   --hud-*), NOT the chrome family (--bg/--fg/--panel), because those flip to
+   light and would turn this dark surface white in light mode. The category hues
+   map 1:1 onto existing tokens; structural panels/borders are derived from --cy
+   with color-mix so there is no stray hex. */
+
+#view-calendar{
+  /* category accents → existing HUD tokens (exact matches) */
+  --cal-cy:var(--cy); --cal-vi:var(--violet); --cal-gr:var(--acc);
+  --cal-am:var(--warn); --cal-pk:var(--bad);
+  /* text + surfaces from the always-dark HUD family */
+  --cal-fg:var(--hud-fg); --cal-mut:var(--hud-mut); --cal-dim:var(--hud-dim);
+  --cal-bg:var(--hud-bg);
+  --cal-panel:color-mix(in srgb,var(--cy) 5%,var(--hud-bg));
+  --cal-panel2:color-mix(in srgb,var(--cy) 9%,var(--hud-bg));
+  --cal-bd:color-mix(in srgb,var(--cy) 20%,transparent);
+  --cal-bd2:color-mix(in srgb,var(--cy) 34%,transparent);
+  --cal-hh:52px;                                  /* MUST equal HH in calendar.js */
+
+  position:fixed;inset:0;z-index:15;display:none;flex-direction:column;gap:12px;
+  /* top: clears the sticky .top navbar (~64px tall) + a ~12px breathing gap under it */
+  padding:76px 16px 14px;font-family:var(--mono);color:var(--cal-fg);letter-spacing:.01em;
+}
+body.v-calendar #view-calendar{display:flex}
+/* fixed HUD background + no body scroll (mirrors body.v-git / body.v-prod) */
+body.v-calendar{background:radial-gradient(1200px 800px at 50% 50%,var(--hud-bg2),var(--hud-bg) 72%) fixed;overflow:hidden}
+
+/* ---- header ---- */
+#view-calendar .cal-head{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;flex:none}
+#view-calendar .cal-head h1{font-size:1.05rem;letter-spacing:.05em;margin:0;display:flex;align-items:center;gap:.5rem}
+#view-calendar .cal-head .sub{font-size:.62rem;color:var(--cal-dim);letter-spacing:.14em;text-transform:uppercase}
+#view-calendar .cal-head .spacer{flex:1}
+#view-calendar .cal-mlabel{font-size:1rem;font-weight:700;min-width:190px;text-align:center;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+/* scoped primary — cyan, distinct from the house .btn.act green */
+#view-calendar .btn.cal-p{color:#04121a;background:linear-gradient(180deg,var(--cal-cy),color-mix(in srgb,var(--cal-cy) 70%,#0ea5e9));border-color:var(--cal-cy);font-weight:600}
+#view-calendar .btn.cal-p:hover{filter:brightness(1.08)}
+/* Google Calendar sync — SUBTLE discoverable placeholder (info-only, not a CTA) */
+#view-calendar .btn.cal-gcal{display:inline-flex;align-items:center;gap:.35rem;border-color:var(--cal-bd2);color:var(--cal-mut)}
+#view-calendar .btn.cal-gcal:hover{color:var(--cal-fg);border-color:var(--cal-cy)}
+
+/* ---- Gemini bar (disabled stub — Phase 3 wires NL) ---- */
+#view-calendar .cal-gbar{display:flex;align-items:center;gap:.6rem;border:1px solid var(--cal-bd);border-radius:13px;
+  padding:.55rem .7rem;flex:none;background:linear-gradient(180deg,color-mix(in srgb,var(--cal-vi) 7%,transparent),color-mix(in srgb,var(--hud-bg) 60%,transparent));opacity:.75}
+#view-calendar .cal-gi{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:.95rem;flex:none;
+  background:radial-gradient(circle at 50% 35%,color-mix(in srgb,var(--cal-vi) 40%,transparent),color-mix(in srgb,var(--hud-bg) 70%,transparent));border:1px solid var(--cal-bd2)}
+#view-calendar .cal-gbar input{flex:1;background:transparent;border:0;color:var(--cal-mut);font-family:inherit;font-size:.82rem;outline:none;min-width:0}
+#view-calendar .cal-gbar input::placeholder{color:var(--cal-dim)}
+#view-calendar .cal-gbar input:disabled{cursor:not-allowed}
+#view-calendar .cal-soon{font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cal-vi);border:1px solid var(--cal-bd2);border-radius:20px;padding:.15rem .5rem;flex:none}
+#view-calendar .cal-gsend{background:color-mix(in srgb,var(--cal-vi) 14%,transparent);border:1px solid var(--cal-bd2);color:var(--cal-mut);font-family:inherit;font-size:.74rem;padding:.4rem .7rem;border-radius:9px;cursor:not-allowed;flex:none}
+/* Phase-3 enabled state (.cal-gon added by calendar.js when the bar goes live) */
+#view-calendar .cal-gbar.cal-gon{opacity:1}
+#view-calendar .cal-gbar.cal-gon input{color:var(--cal-fg)}
+#view-calendar .cal-gbar.cal-gon .cal-gsend{cursor:pointer;color:#04121a;font-weight:600;
+  background:linear-gradient(180deg,var(--cal-vi),color-mix(in srgb,var(--cal-vi) 68%,#000));border-color:var(--cal-vi)}
+#view-calendar .cal-gbar.cal-gon .cal-gsend:hover{filter:brightness(1.08)}
+#view-calendar .cal-gbar.cal-gon .cal-gsend:disabled{cursor:default;filter:none;opacity:.55}
+
+/* ---- F7: "Predlozi" strip (auto-suggested events — ticket deadlines, worklog
+   sessions, deploys, opt-in mail/chat). Sits above the grid, same header-row
+   idiom as .cal-gbar; collapsible (state in localStorage, calendar.js). The
+   "izvori" gear opens a MODAL (reuses .cal-ov/.cal-dlg, same shell as the
+   scope chooser) rather than an anchored popover — .cal-surface below clips
+   overflow for its rounded corners, and this strip sits right above it, so an
+   anchored dropdown risks the same clipping trap; the shared modal shell has
+   no such ancestor and needs no escape-the-card gymnastics. ---- */
+#view-calendar .cal-sug{border:1px solid var(--cal-bd);border-radius:13px;flex:none;overflow:hidden;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cal-vi) 6%,transparent),color-mix(in srgb,var(--hud-bg) 55%,transparent))}
+#view-calendar .cal-sug-head{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;cursor:pointer;user-select:none}
+#view-calendar .cal-sug-chev{color:var(--cal-dim);font-size:.7rem;display:inline-block;transition:transform .15s}
+#view-calendar .cal-sug.collapsed .cal-sug-chev{transform:rotate(-90deg)}
+#view-calendar .cal-sug-tt{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cal-vi)}
+#view-calendar .cal-sug-count{font-size:.66rem;color:var(--cal-fg);background:color-mix(in srgb,var(--cal-vi) 22%,transparent);
+  border-radius:20px;padding:.05rem .5rem;font-variant-numeric:tabular-nums;min-width:1.4em;text-align:center}
+#view-calendar .cal-sug-gear{font-size:.9rem;color:var(--cal-dim);cursor:pointer;padding:2px 5px;border-radius:6px;line-height:1}
+.cal-sug-refresh{font-size:.72rem;color:var(--hud-mut);cursor:pointer;margin-right:.6rem;border:1px solid var(--panelbd);border-radius:12px;padding:.1rem .5rem}.cal-sug-refresh:hover{color:var(--hud-fg)}.cal-sug-refresh.busy{opacity:.5;cursor:progress}
+#view-calendar .cal-sug-gear:hover{color:var(--cal-fg);background:color-mix(in srgb,var(--cal-cy) 12%,transparent)}
+#view-calendar .cal-sug-body{border-top:1px solid var(--cal-bd);padding:.5rem .75rem;display:flex;flex-direction:column;
+  gap:2px;max-height:180px;overflow-y:auto}
+#view-calendar .cal-sug.collapsed .cal-sug-body{display:none}
+#view-calendar .cal-sug-row{display:flex;align-items:center;gap:.55rem;font-size:.74rem;padding:.32rem .1rem;border-bottom:1px dashed var(--cal-bd)}
+#view-calendar .cal-sug-row:last-child{border-bottom:0}
+#view-calendar .cal-sug-badge{flex:none;font-size:.62rem;letter-spacing:.03em;padding:.15rem .5rem;border-radius:20px;
+  border:1px solid var(--cal-bd2);color:var(--cal-mut);white-space:nowrap}
+#view-calendar .cal-sug-badge.cal-src-ticket{border-color:var(--cal-am);color:var(--cal-am)}
+#view-calendar .cal-sug-badge.cal-src-worklog{border-color:var(--cal-cy);color:var(--cal-cy)}
+#view-calendar .cal-sug-badge.cal-src-deploy{border-color:var(--cal-gr);color:var(--cal-gr)}
+#view-calendar .cal-sug-badge.cal-src-mail{border-color:var(--cal-vi);color:var(--cal-vi)}
+#view-calendar .cal-sug-badge.cal-src-chat{border-color:var(--cal-pk);color:var(--cal-pk)}
+#view-calendar .cal-sug-title{flex:1;min-width:0;color:var(--cal-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-calendar .cal-sug-when{flex:none;font-size:.66rem;color:var(--cal-dim);font-variant-numeric:tabular-nums}
+#view-calendar .cal-sug-acc,#view-calendar .cal-sug-dis{flex:none;font-family:inherit;font-size:.68rem;border-radius:8px;
+  padding:.28rem .55rem;cursor:pointer;border:1px solid var(--cal-bd2);background:transparent;color:var(--cal-mut)}
+#view-calendar .cal-sug-acc{color:#04121a;background:var(--cal-cy);border-color:var(--cal-cy);font-weight:600}
+#view-calendar .cal-sug-acc:hover{filter:brightness(1.08)}
+#view-calendar .cal-sug-dis:hover{color:var(--cal-pk);border-color:var(--cal-pk)}
+#view-calendar .cal-sug-empty,#view-calendar .cal-sug-note{font-size:.72rem;color:var(--cal-dim);padding:.35rem .1rem}
+#view-calendar .cal-sug-note.load{color:var(--cal-cy)}
+
+/* izvori modal — checkboxes bound to GET/POST /api/calendar/sources */
+#view-calendar .cal-src-list{display:flex;flex-direction:column;gap:2px}
+#view-calendar .cal-src-note{font-size:.64rem;color:var(--cal-dim);margin:-4px 0 8px 1.6rem}
+
+/* auto-created occurrence (source != manual): dashed accent instead of solid,
+   so it reads as "suggested/auto", never a new colour — same category tokens. */
+#view-calendar .cal-ev.auto{border-left-style:dashed;outline:1px dashed var(--cal-bd2);outline-offset:-1px}
+#view-calendar .cal-tg-ev.auto{border-left-style:dashed;outline:1px dashed var(--cal-bd2);outline-offset:-1px}
+#view-calendar .cal-up.auto{border-left:2px dashed var(--cal-dim);padding-left:6px;margin-left:-8px}
+#view-calendar .cal-src-badge{margin-left:4px;opacity:.85;font-size:.92em}
+
+/* ---- layout: calendar surface + Predstojeće rail ---- */
+#view-calendar .cal-layout{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px}
+@media(max-width:860px){#view-calendar .cal-layout{grid-template-columns:1fr}#view-calendar .cal-rail{display:none}}
+#view-calendar .cal-surface{border:1px solid var(--cal-bd);border-radius:15px;overflow:hidden;
+  background:linear-gradient(180deg,var(--cal-panel),var(--cal-bg));display:flex;flex-direction:column;min-height:0;position:relative}
+
+/* error / loading strip that never blanks the grid */
+#view-calendar .cal-note{flex:none;font-size:.72rem;padding:.45rem .8rem;border-bottom:1px solid var(--cal-bd);
+  background:color-mix(in srgb,var(--cal-pk) 12%,transparent);color:var(--cal-fg)}
+#view-calendar .cal-note.load{background:color-mix(in srgb,var(--cal-cy) 10%,transparent)}
+
+/* ---- MONTH ---- */
+#view-calendar .cal-wk{display:grid;grid-template-columns:repeat(7,1fr);background:var(--cal-panel2);border-bottom:1px solid var(--cal-bd);flex:none}
+#view-calendar .cal-wk div{padding:.55rem .7rem;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--cal-dim);text-align:right}
+#view-calendar .cal-grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(6,1fr);min-height:0}
+#view-calendar .cal-cell{border-right:1px solid var(--cal-bd);border-bottom:1px solid var(--cal-bd);padding:.4rem .55rem;cursor:pointer;position:relative;overflow:hidden;transition:background .15s}
+#view-calendar .cal-cell:nth-child(7n){border-right:0}
+#view-calendar .cal-cell:hover{background:color-mix(in srgb,var(--cal-cy) 5%,transparent)}
+#view-calendar .cal-cell.out{opacity:.32}
+#view-calendar .cal-dn{font-size:.82rem;color:var(--cal-mut);text-align:right;font-variant-numeric:tabular-nums;margin-bottom:2px}
+#view-calendar .cal-cell.today .cal-dn{color:#04121a;background:var(--cal-cy);border-radius:50%;width:24px;height:24px;line-height:24px;display:inline-block;text-align:center;float:right;font-weight:700;box-shadow:0 0 12px color-mix(in srgb,var(--cal-cy) 50%,transparent)}
+#view-calendar .cal-ev{margin-top:3px;font-size:.68rem;padding:.18rem .45rem;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-left:3px solid var(--cal-cy);background:color-mix(in srgb,var(--cal-cy) 14%,transparent);color:var(--cal-fg);cursor:pointer}
+#view-calendar .cal-ev .cal-t{color:var(--cal-dim);margin-right:5px;font-variant-numeric:tabular-nums}
+#view-calendar .cal-ev .cal-rep{opacity:.8;margin-left:4px;font-size:.9em}
+#view-calendar .cal-ev.vi{border-color:var(--cal-vi);background:color-mix(in srgb,var(--cal-vi) 16%,transparent)}
+#view-calendar .cal-ev.gr{border-color:var(--cal-gr);background:color-mix(in srgb,var(--cal-gr) 15%,transparent)}
+#view-calendar .cal-ev.am{border-color:var(--cal-am);background:color-mix(in srgb,var(--cal-am) 15%,transparent)}
+#view-calendar .cal-ev.pk{border-color:var(--cal-pk);background:color-mix(in srgb,var(--cal-pk) 15%,transparent)}
+#view-calendar .cal-more{font-size:.6rem;color:var(--cal-dim);margin-top:2px}
+/* month empty state (no events at all in range) */
+#view-calendar .cal-empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;color:var(--cal-dim);font-size:.8rem;text-align:center;padding:1rem}
+
+/* ---- WEEK / DAY time grid ---- */
+#view-calendar .cal-tg{flex:1;display:flex;flex-direction:column;min-height:0}
+#view-calendar .cal-tg-head{display:grid;flex:none;border-bottom:1px solid var(--cal-bd);background:var(--cal-panel2)}
+#view-calendar .cal-tg-dh{padding:.5rem .25rem;text-align:center;font-size:.66rem;color:var(--cal-mut);border-left:1px solid var(--cal-bd)}
+#view-calendar .cal-tg-dh:first-child{border-left:0}
+#view-calendar .cal-tg-dh b{font-size:1rem;color:var(--cal-fg);margin-left:5px}
+#view-calendar .cal-tg-dh.t b{color:#04121a;background:var(--cal-cy);border-radius:50%;padding:1px 6px}
+#view-calendar .cal-tg-ad{display:grid;flex:none;border-bottom:1px solid var(--cal-bd);min-height:26px}
+#view-calendar .cal-tg-ad .cal-lab{font-size:.54rem;color:var(--cal-dim);text-transform:uppercase;letter-spacing:.1em;padding:.4rem .25rem;text-align:right;align-self:center}
+#view-calendar .cal-tg-adcol{border-left:1px solid var(--cal-bd);padding:3px}
+#view-calendar .cal-tg-scroll{flex:1;overflow-y:auto;min-height:0}
+#view-calendar .cal-tg-body{display:grid;position:relative}
+#view-calendar .cal-tg-axis .cal-hr{height:var(--cal-hh);font-size:.58rem;color:var(--cal-dim);text-align:right;padding-right:6px;position:relative;top:-6px}
+#view-calendar .cal-tg-col{position:relative;border-left:1px solid var(--cal-bd);cursor:pointer;
+  background:repeating-linear-gradient(transparent 0 calc(var(--cal-hh) - 1px),var(--cal-bd) calc(var(--cal-hh) - 1px) var(--cal-hh))}
+#view-calendar .cal-tg-ev{position:absolute;left:3px;right:3px;border-radius:6px;padding:.18rem .45rem;font-size:.66rem;overflow:hidden;
+  border-left:3px solid var(--cal-cy);background:color-mix(in srgb,var(--cal-cy) 18%,var(--hud-bg));color:var(--cal-fg);cursor:pointer}
+#view-calendar .cal-tg-ev b{font-variant-numeric:tabular-nums}
+#view-calendar .cal-tg-ev.vi{border-color:var(--cal-vi);background:color-mix(in srgb,var(--cal-vi) 22%,var(--hud-bg))}
+#view-calendar .cal-tg-ev.gr{border-color:var(--cal-gr);background:color-mix(in srgb,var(--cal-gr) 20%,var(--hud-bg))}
+#view-calendar .cal-tg-ev.am{border-color:var(--cal-am);background:color-mix(in srgb,var(--cal-am) 20%,var(--hud-bg))}
+#view-calendar .cal-tg-ev.pk{border-color:var(--cal-pk);background:color-mix(in srgb,var(--cal-pk) 22%,var(--hud-bg))}
+#view-calendar .cal-nowline{position:absolute;left:0;right:0;height:0;border-top:1.5px solid var(--cal-pk);z-index:3}
+#view-calendar .cal-nowline::before{content:"";position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--cal-pk)}
+
+/* ---- Predstojeće rail ---- */
+#view-calendar .cal-rail{border:1px solid var(--cal-bd);border-radius:15px;background:linear-gradient(180deg,var(--cal-panel),var(--cal-bg));padding:14px;display:flex;flex-direction:column;min-height:0}
+#view-calendar .cal-rail h3{margin:0 0 10px;font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;color:var(--cal-cy);flex:none}
+#view-calendar .cal-uplist{overflow-y:auto;flex:1;min-height:0}
+#view-calendar .cal-up{display:flex;gap:.55rem;align-items:flex-start;padding:.55rem 0;border-top:1px solid var(--cal-bd);cursor:pointer}
+#view-calendar .cal-up:first-child{border-top:0}
+#view-calendar .cal-up .cal-dot{width:9px;height:9px;border-radius:3px;margin-top:4px;flex:none;background:var(--cal-cy)}
+#view-calendar .cal-up.vi .cal-dot{background:var(--cal-vi)}
+#view-calendar .cal-up.gr .cal-dot{background:var(--cal-gr)}
+#view-calendar .cal-up.am .cal-dot{background:var(--cal-am)}
+#view-calendar .cal-up.pk .cal-dot{background:var(--cal-pk)}
+#view-calendar .cal-up .u1{font-size:.78rem;color:var(--cal-fg)}
+#view-calendar .cal-up .u2{font-size:.62rem;color:var(--cal-dim);margin-top:1px}
+#view-calendar .cal-up .cal-rep{margin-left:4px;opacity:.8}
+#view-calendar .cal-railempty{color:var(--cal-dim);font-size:.72rem;padding:.5rem 0}
+#view-calendar .cal-rail .cal-addbtn{margin-top:12px;width:100%;flex:none}
+
+/* ---- modal (create / edit + recurrence) ---- */
+#view-calendar .cal-ov{position:fixed;inset:0;background:color-mix(in srgb,var(--hud-bg) 72%,transparent);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:80;padding:16px}
+#view-calendar .cal-ov.on{display:flex}
+#view-calendar .cal-dlg{width:100%;max-width:440px;max-height:calc(100vh - 40px);overflow:auto;border:1px solid var(--cal-bd2);border-radius:16px;
+  background:linear-gradient(180deg,var(--cal-panel2),var(--cal-bg));padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#view-calendar .cal-dlg h2{margin:0 0 14px;font-size:.92rem;display:flex;align-items:center;gap:.5rem}
+#view-calendar .cal-dlg h2 .x{margin-left:auto;cursor:pointer;color:var(--cal-dim);font-size:1.05rem;line-height:1}
+#view-calendar .cal-dlg h2 .x:hover{color:var(--cal-fg)}
+#view-calendar .cal-fld{margin-bottom:11px}
+#view-calendar .cal-fld label{display:block;font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cal-dim);margin-bottom:4px}
+#view-calendar .cal-fld input,#view-calendar .cal-fld select,#view-calendar .cal-fld textarea{width:100%;background:var(--cal-bg);border:1px solid var(--cal-bd);border-radius:8px;color:var(--cal-fg);font-family:inherit;font-size:.8rem;padding:.45rem .55rem;outline:none}
+#view-calendar .cal-fld input:focus,#view-calendar .cal-fld select:focus,#view-calendar .cal-fld textarea:focus{border-color:var(--cal-cy)}
+#view-calendar .cal-fld input[type=date]::-webkit-calendar-picker-indicator,#view-calendar .cal-fld input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.7) sepia(1) saturate(4) hue-rotate(150deg)}
+#view-calendar .cal-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#view-calendar .cal-chk{display:flex;align-items:center;gap:.45rem;font-size:.74rem;color:var(--cal-mut);cursor:pointer;text-transform:none;letter-spacing:0;padding:.45rem 0}
+#view-calendar .cal-chk input{width:auto}
+#view-calendar .cal-cats{display:flex;gap:6px;flex-wrap:wrap}
+#view-calendar .cal-cat{border:1px solid var(--cal-bd);border-radius:16px;padding:.3rem .6rem;font-size:.68rem;cursor:pointer;color:var(--cal-mut);display:flex;gap:.3rem;align-items:center}
+#view-calendar .cal-cat .cal-sw{width:9px;height:9px;border-radius:50%}
+#view-calendar .cal-cat.sel{border-color:var(--cal-cy);color:var(--cal-fg);background:color-mix(in srgb,var(--cal-cy) 8%,transparent)}
+
+/* recurrence sub-panel */
+#view-calendar .cal-rec{border:1px dashed var(--cal-bd);border-radius:10px;padding:11px 11px 4px;margin-bottom:11px;background:color-mix(in srgb,var(--cal-cy) 3%,transparent)}
+#view-calendar .cal-byday{display:flex;gap:5px;flex-wrap:wrap}
+#view-calendar .cal-day{border:1px solid var(--cal-bd);border-radius:8px;padding:.3rem .5rem;font-size:.68rem;cursor:pointer;color:var(--cal-mut);min-width:34px;text-align:center;user-select:none}
+#view-calendar .cal-day.sel{border-color:var(--cal-cy);color:#04121a;background:var(--cal-cy);font-weight:600}
+#view-calendar .cal-rrule-preview{font-size:.6rem;letter-spacing:.06em;color:var(--cal-dim);font-variant-numeric:tabular-nums;padding:2px 2px 4px;word-break:break-all}
+#view-calendar [hidden]{display:none}
+
+#view-calendar .cal-dlgact{display:flex;gap:8px;margin-top:16px}
+#view-calendar .cal-dlgact .del{margin-right:auto;border-color:var(--cal-pk);color:#ffd8de;background:color-mix(in srgb,var(--cal-pk) 12%,transparent)}
+#view-calendar .cal-scope-msg{font-size:.78rem;color:var(--cal-mut);margin:0 0 6px;line-height:1.5}
+#view-calendar .cal-scope-dlg{max-width:390px}
+
+/* toast */
+#view-calendar .cal-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cal-vi) 92%,#000),color-mix(in srgb,var(--cal-vi) 60%,#000));
+  color:#fff;padding:.55rem .9rem;border-radius:11px;font-size:.78rem;box-shadow:0 10px 30px rgba(0,0,0,.4);
+  transition:all .3s;pointer-events:none;z-index:90;max-width:80vw}
+#view-calendar .cal-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#view-calendar .cal-toast.err{background:linear-gradient(180deg,color-mix(in srgb,var(--cal-pk) 92%,#000),color-mix(in srgb,var(--cal-pk) 60%,#000))}
+
+/* ---- Phase-2 reminder cards ----
+   These live in the shared #focus-cards bottom-right stack (or the #cal-remind-host
+   fallback), which is OUTSIDE #view-calendar so a reminder shows on ANY tab. That is
+   the one place calendar rules aren't scoped under #view-calendar — hence base HUD
+   tokens (--panelbg/--cy/--warn/…), never --cal-* (those only resolve inside the view).
+   Mirrors .focus-card in app.css so the two card families read as one system. */
+#cal-remind-host{position:fixed;right:20px;bottom:20px;z-index:55;pointer-events:none;
+  display:flex;flex-direction:column;gap:10px;align-items:flex-end;max-width:min(340px,calc(100vw - 40px))}
+.cal-remind{pointer-events:auto;width:300px;max-width:100%;font-family:var(--mono);color:var(--hud-fg);
+  background:var(--panelbg);border:1px solid var(--panelbd);border-left:3px solid var(--cy);border-radius:10px;
+  padding:.7rem .8rem;box-shadow:0 10px 30px rgba(0,0,0,.45);backdrop-filter:blur(6px);animation:cal-remind-in .25s ease}
+@keyframes cal-remind-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.cal-remind.vi{border-left-color:var(--violet)}
+.cal-remind.gr{border-left-color:var(--acc)}
+.cal-remind.am{border-left-color:var(--warn)}
+.cal-remind.pk{border-left-color:var(--bad)}
+.cal-remind-top{display:flex;align-items:flex-start;gap:.5rem}
+.cal-remind-ico{font-size:1rem;flex:none;line-height:1.2}
+.cal-remind-tt{flex:1;min-width:0}
+.cal-remind-title{font-size:.86rem;font-weight:600;color:var(--hud-fg);word-break:break-word}
+.cal-remind-when{font-size:.72rem;color:var(--hud-mut);margin-top:2px}
+.cal-remind-acts{display:flex;gap:.45rem;margin-top:.6rem}
+.cal-remind-acts button{font-family:var(--mono);font-size:.74rem;border-radius:7px;padding:.32rem .6rem;cursor:pointer;
+  border:1px solid var(--panelbd);background:rgba(8,15,24,.5);color:var(--hud-fg)}
+.cal-remind-acts .cal-remind-open{border-color:color-mix(in srgb,var(--cy) 55%,transparent);color:var(--cy)}
+.cal-remind-acts .cal-remind-open:hover{background:color-mix(in srgb,var(--cy) 16%,transparent)}
+.cal-remind-acts .cal-remind-ok{margin-left:auto;color:var(--hud-mut)}
+.cal-remind-acts .cal-remind-ok:hover{color:var(--hud-fg)}
+
+/* Reduced-motion: app.css already kills @keyframes animations globally; also drop
+   our transitions/transforms so nothing eases or slides for these users. */
+@media(prefers-reduced-motion:reduce){
+  #view-calendar .cal-cell,#view-calendar .btn.cal-p,#view-calendar .cal-sug-chev{transition:none}
+  #view-calendar .cal-toast{transition:none;transform:translateX(-50%)}
+  .cal-remind{animation:none}
+}

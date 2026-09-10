@@ -1,0 +1,114 @@
+name: brain
+
+# The brain ships governance as code. Until this file existed, its OWN
+# governance was advisory: health.py ran at SessionStart on one machine, in
+# --quiet mode, and nothing it reported could stop anything.
+#
+# What runs here is deliberately the FREE tier only -- no model, no API key, no
+# tokens. It is fast enough to gate every push, which is the only property that
+# makes a check matter. The paid tier (behaviour evals) is the separate
+# workflow_dispatch job below, because a gate that costs money per push gets
+# turned off.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    # windows-latest, not ubuntu: this brain runs on two Windows desktops and
+    # nothing else. The first ubuntu run failed 5 of 21 test files -- all
+    # pre-existing, all portability (a `C:/...` literal is not an absolute path
+    # on POSIX, so a whole branch of store.repo_path is unreachable there). A
+    # gate that is red for reasons unrelated to the change under test is a gate
+    # people learn to ignore, so it gates the platform in use and
+    # docs/SETUP-linux-macos.md carries the known gap.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install
+        run: |
+          echo "[brain] install"
+          python -m pip install --quiet --upgrade pip
+          # pyyaml: lets health.py validate frontmatter, and evals.py read cases.
+          # pillow: the visual engine imports PIL INSIDE its functions, so the
+          # module imports fine and only the calls fail -- which is how
+          # SETUP-linux-macos.md came to claim "stdlib only" for a repo that
+          # needs it. Two test files went red here before it was installed.
+          python -m pip install --quiet pyyaml pillow
+
+      # Critical: a test that no longer passes is a rule that no longer holds.
+      # --fast drops the browser-driven integration test; it needs a browser
+      # the runner does not have, and it is exercised locally instead.
+      - name: tests
+        run: |
+          echo "[brain] tests"
+          python scripts/brain/tests.py --fast
+
+      # Critical: this is the regression suite for the SKILLS, HOOKS and
+      # ROUTING -- the layer that has no other way to fail visibly.
+      - name: evals
+        run: |
+          echo "[brain] evals"
+          python scripts/brain/evals.py
+
+      # Critical: stale generated docs, a skill over its context budget, an
+      # agent preloading a skill that does not exist, frontmatter that will not
+      # parse (which loads an agent with EMPTY metadata and says nothing).
+      # --no-git because a runner's working tree is always clean and has no
+      # upstream to be ahead of; those checks describe a machine, not the repo.
+      - name: health
+        run: |
+          echo "[brain] health"
+          python scripts/brain/health.py --no-git
+
+      # Not critical: the budget report is a number to look at, not a
+      # threshold to fail on -- health.py already fails on the thresholds that
+      # matter. Explicitly non-fatal rather than left to chance, because under
+      # fail-fast an unmarked step is a fatal step.
+      - name: budget
+        run: |
+          echo "[brain] budget"
+          python scripts/budget.py || true
+
+  # The paid tier. Never on push: it spends tokens per run, and a gate that
+  # costs money on every commit is a gate that gets removed. Run it when the
+  # thing it measures actually changed -- a skill rewritten, a hook reworked --
+  # and on a schedule so drift surfaces without anyone remembering to look.
+  behaviour:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install
+        run: |
+          echo "[brain] install"
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet pyyaml
+          npm install -g @anthropic-ai/claude-code
+
+      # A missing key must SAY so and stop, not silently pass an empty run.
+      # "0 failures" out of 0 cases is the shape of every check that quietly
+      # stopped checking.
+      - name: behaviour evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "[brain] behaviour evals"
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is not set -- refusing to report a pass on zero cases"
+            exit 1
+          fi
+          python scripts/brain/evals.py --behaviour --kind behaviour --record

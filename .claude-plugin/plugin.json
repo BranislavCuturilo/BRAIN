@@ -1,0 +1,8 @@
+{
+  "name": "brain",
+  "description": "Portable engineering brain: craft, stack, seam and ops rule sets that follow the same engineer across every project and machine.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Brain contributors"
+  }
+}

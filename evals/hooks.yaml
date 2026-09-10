@@ -1,0 +1,80 @@
+# The reminder hooks in `hooks.json`.
+#
+# These are the WEAKEST layer -- they inject a sentence and can be ignored, and
+# the brain's own history says fourteen of them produced zero skill invocations
+# in a day. They are kept because they carry the three-line summary of the rule
+# to the exact moment of the edit, and because they cost nothing.
+#
+# What these cases actually protect is the GLOB. A reminder whose pattern stops
+# matching the file it was written for does not fail -- it just never fires
+# again, and nothing anywhere says so.
+
+- name: writing Python fires the code/security/reuse reminder
+  kind: hook
+  origin: >
+    An audit of code written from recall alone, in a session where these very
+    files had been edited hours earlier, found six defects -- two of them
+    verbatim violations of the skills in question (hooks.json).
+  proves: craft-code
+  case:
+    path: apps/warehouse/views.py
+    tool: Edit
+  expect_names: [craft-code, craft-security, craft-reuse]
+
+- name: the same reminder fires for the other five languages it claims to cover
+  kind: hook
+  origin: >
+    The clause lists .py, .rb, .php, .go, .ts and .js. A list is exactly the
+    shape that rots: one entry is edited and the others are assumed still
+    right. Checked here rather than assumed.
+  proves: craft-code
+  case:
+    path: src/handlers/order.ts
+    tool: Write
+  expect_names: [craft-code]
+
+- name: writing a test fires the testing reminder
+  kind: hook
+  origin: >
+    The data-loss post-mortem: a transactional base class truncates every
+    table between classes, so a suite pointed at production wipes it entirely
+    in one run (craft-testing).
+  proves: craft-testing
+  case:
+    path: apps/warehouse/tests/test_movements.py
+    tool: Write
+  expect_names: [craft-testing]
+
+- name: a CI workflow fires the deploy reminder
+  kind: hook
+  origin: >
+    Under fail-fast a bare `grep -q` whose no-match result is non-zero kills
+    the deploy silently. Two real outages (craft-git).
+  proves: craft-git
+  case:
+    path: .github/workflows/deploy.yml
+    tool: Edit
+  expect_names: [craft-git]
+
+- name: a compose file fires the deploy reminder too
+  kind: hook
+  origin: >
+    Containers and compose files were added to the same clause after a deploy
+    that shipped nothing while reporting success.
+  proves: craft-git
+  case:
+    path: docker-compose.prod.yml
+    tool: Edit
+  expect_names: [craft-git]
+
+- name: editing the brain itself fires the routing-law reminder
+  kind: hook
+  origin: >
+    A rule belongs to the outermost layer where it is still true, and a rule
+    duplicated across two files is how two versions of it come to exist
+    (skills/brain).
+  proves: brain
+  case:
+    path: ~/.claude/skills/brain/skills/craft-code/SKILL.md
+    tool: Edit
+  expect_names: [brain]

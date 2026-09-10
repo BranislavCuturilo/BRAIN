@@ -1,0 +1,139 @@
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+
+# scratch: written for one task, not expected to survive
+scripts/temp/
+
+# Local venv — regenerated per machine, never committed. (The agent_view config
+# with the Gemini API key is intentionally TRACKED: private repo, sole access,
+# and it makes migrating to another machine a one-file setup.)
+agent_view/.venv/
+
+# Credentials the HUD's setup gate writes. capabilities.save_secret() verifies
+# with `git check-ignore` that this line exists and REFUSES to write without it,
+# so deleting it does not quietly start staging tokens — it stops the feature,
+# loudly. This is the DEFAULT for anyone who clones a release; the tracked
+# config above stays as it is here by the owner's decision.
+agent_view/agent_view.secrets.json
+agent_view/agent_view.secrets.json.tmp
+
+# Monitor (VPS) access: base URL + read-only MCP token for monitor.example.com.
+# SUPERSEDED (decision 2026-08-19, F5): the url+token now live in the TRACKED
+# agent_view.config.json ("monitor": {"url","token"}) — a private repo, sole
+# access, read-only credential, so it migrates with `git pull` like the Gemini
+# key does. This file stays gitignored as the LAST-RESORT fallback
+# monitor_client.py still reads when the tracked config has no "monitor" key;
+# run agent_view/seed_tracked_config.py once to copy an existing file's value in.
+agent_view/agent_view.monitor.config.json
+
+# Mail account config. SUPERSEDED (decision 2026-08-19, F5): metadata (host,
+# address, imap/smtp settings) now lives in the TRACKED agent_view.config.json
+# ("mail_accounts": [...], no secret) so a fresh machine inherits every known
+# account on pull. This file stays gitignored and now holds ONLY the
+# DPAPI-encrypted password per account ({"accounts":[{"id","pass_enc"}]}, plus
+# the full record for any account not yet pushed to the tracked config) — kept
+# LOCAL not for secrecy of the ciphertext but because DPAPI ciphertext is bound
+# to this Windows account and will NOT decrypt on another machine; the mail tab
+# asks for the password once per machine when it is missing.
+agent_view/agent_view.mail.config.json
+
+# Local mail cache: a Thunderbird-style SQLite store of received mail. Large and
+# fully re-syncable from the server, so it stays out of git.
+agent_view/mail_cache.sqlite
+agent_view/mail_cache.sqlite-wal
+agent_view/mail_cache.sqlite-shm
+
+# Focus timer runtime state (water/stretch/pushups counters, reminder schedule).
+# Per-machine runtime, rewritten continuously — like the mail cache, out of git.
+agent_view/focus_state.json
+agent_view/focus_state.json.tmp
+
+# Idle-game runtime state (tokens economy, upgrades owned, shield/hp, daily collect).
+# Per-machine runtime, rewritten continuously like focus_state.json — out of git.
+agent_view/game_state.json
+agent_view/game_state.json.tmp
+
+# Calendar events — personal calendar data, written continuously by the calendar
+# service. Per-machine runtime like focus_state.json, out of git.
+agent_view/calendar_store.json
+agent_view/calendar_store.json.tmp
+
+# Ephemeral per-day Gemini call counter — rewritten on every call, resets daily,
+# irrelevant to migration. Ignored to avoid constant churn (not because it's big).
+scripts/tickets/.gemini_usage.json
+
+# Ephemeral triage watermark (last auto-triage time) — rewritten on every sweep,
+# irrelevant to migration. Ignored to avoid churn even though tickets_store is tracked.
+tickets_store/.last_triage
+
+# Learned per-creator ticket-reader profiles (writing style/needs/patterns) —
+# per-machine learning, rewritten on each analyse, like mail_profiles. Out of git.
+agent_view/ticket_profiles/
+agent_view/mail_profiles/
+
+# Idle-game quiz bank (Gemini-authored MCQs, per-machine content). Rewritten by
+# background generation like ticket_profiles/mail_profiles — out of git.
+agent_view/quiz_bank/
+
+# Per-machine module->repo overrides (a project whose folder NAME differs on
+# this machine, not just its root — see store.module_repo). Never shared.
+tickets_store/modules.local.json
+
+# Ticket attachment cache: downloaded helpdesk attachments (images/xlsx digests),
+# keyed by URL — fully re-fetchable, per-machine, out of git.
+agent_view/attachment_cache/
+
+# Transient store locks (store.filelock creates and unlinks one around every
+# write, including the per-device worklog/sent_log appends). Only a crashed
+# writer leaves one behind, and committing that would make the OTHER machine
+# wait out the stale window after a pull.
+tickets_store/*.lock
+tickets_store/**/*.lock
+
+# Derived, regenerable from worklog + the module files (build_estimates.py) - never a source of truth, so never committed (would conflict between devices).
+tickets_store/estimates.csv
+tickets_store/estimates.csv.tmp
+
+# F7 calendar suggestions (calsug.py): the dismissed-sid list and the per-day
+# AI-reply cache are per-machine and would conflict between devices, like
+# .gemini_usage.json — out of git.
+tickets_store/.calsug_dismissed.json
+tickets_store/.calsug_dismissed.json.tmp
+tickets_store/.calsug_cache.json
+tickets_store/.calsug_cache.json.tmp
+
+# Before/after screenshots for a ticket's visual change (visual-diff). Per machine
+# and large; only the APPROVED pair leaves here, as a helpdesk comment attachment.
+agent_view/.shots/
+
+# detached job state: transient, per-machine, never worth a merge conflict
+journal/jobs/
+
+# sync outcome marker: per-machine, rewritten every run, never worth a commit
+journal/sync-last.json
+
+# Gate ledger (verified.py): when tests.py and evals.py last passed IN THIS
+# WORKING COPY. Deliberately NOT shared, unlike cadence.json and
+# upstream-seen.json which record that a REVIEW happened and are worth syncing.
+# A run on this machine says nothing about the other machine's tree, so a
+# committed ledger would arrive there newer than its own edits and silence the
+# stop gate exactly when it should fire — the gate would lie, quietly.
+journal/verified.json
+
+# Hook-event existence cache: keyed to the mtime and size of the Claude Code
+# binary on THIS machine, so the stamp never matches on another one and the
+# file would churn on every pull for nothing. The check simply re-reads there,
+# which takes ~3s once per Claude Code version. Same reasoning as
+# journal/verified.json: it describes this working copy, not the work.
+journal/hook-events.json
+# Plan-usage cache (scripts/brain/usage_limit.py): a number about THIS
+# machine's session, refreshed every minute; never the token.
+journal/usage-limit.json
+# Per-session status-line payloads (model, context, cost) the HUD reads;
+# this machine's live sessions, never the work.
+journal/statusline/
+# Compactions on THIS machine (scripts/brain/compact_brief.py --record):
+# a measurement of when context ran out, not the work.
+journal/compacts.jsonl

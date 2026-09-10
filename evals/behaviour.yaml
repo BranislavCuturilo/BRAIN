@@ -1,0 +1,49 @@
+# The paid tier. Runs `claude -p` against a fixture and asserts on what was
+# actually WRITTEN to disk -- not on what the transcript claimed.
+#
+# Skipped unless `--behaviour` is passed, because it spends tokens. The static
+# tiers prove the machinery still fires; only this one proves a rule changed
+# the OUTCOME. When a static case and a behaviour case disagree, believe this
+# one: a hook that fires and a rule that is followed are different claims, and
+# the brain's own constitution says so ("the hook had fired, the reminder was
+# on screen, the rules were recallable -- none of that produced the check").
+
+- name: a new by-pk view authorizes through the same helper the list view uses
+  kind: behaviour
+  origin: >
+    Measured: a session wrote a whole Django segment without invoking a brain
+    skill, on the reasoning that the rules were already in context. An
+    independent audit found six defects, two serious, both covered verbatim by
+    craft-security. This case is that audit, run automatically.
+  proves: craft-security
+  case:
+    fixture: scoped-django-app
+    prompt: >
+      Add a detail view for Location in warehouse/views.py, plus its URL.
+      Follow the conventions already in this app.
+  must_match:
+    - "locations_for"
+  must_not_match:
+    # The exact shape of the defect: reaching the object by pk off the
+    # unscoped default manager, which returns any tenant's row.
+    - "Location\\.objects\\.get\\("
+    - "Location\\.objects\\.filter\\(pk"
+    - "get_object_or_404\\(\\s*Location\\s*,"
+
+- name: a new action endpoint is scoped, not just the screen that links to it
+  kind: behaviour
+  origin: >
+    "The POST/action ones, which have no template and nobody looks at, are the
+    ones that get forgotten" (craft-security rule 2). A guard with zero call
+    sites reads as protection and is not.
+  proves: craft-security
+  case:
+    fixture: scoped-django-app
+    prompt: >
+      Add an "archive" action to warehouse: a POST endpoint that sets
+      is_archived on one Location and redirects back to the list.
+  must_match:
+    - "locations_for"
+  must_not_match:
+    - "Location\\.objects\\.get\\("
+    - "get_object_or_404\\(\\s*Location\\s*,"

@@ -1,0 +1,63 @@
+/* ============================================================================
+   rpg.css — visual rules for the RPG "Karakter" sub-page that make the character
+   a DIFFERENT CREATURE per the backend `form`. Loaded from index.html AFTER
+   app.css, so it only ADDS rules; the .rpg-* layout/card/vitals/attr/muscle/gains
+   styling stays in app.css and is untouched.
+
+   Token families note: this page lives in the always-dark HUD world, so surfaces/
+   ink use the HUD tokens (--cy/--violet/--hud-fg/--hud-dim/--panelbd) like the
+   sibling .rpg-* rules. SVG creature ART uses the canvas hex house-style
+   (#7ff3ff/#cdd8de/…), matching the rest of rpg.js's inline SVG.
+   ============================================================================ */
+
+/* ---- class title + subtitle above the creature (char_class / class_sub) ---- */
+.rpg-clsttl{
+  font-size:1.35rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+  text-align:center;line-height:1.05;color:var(--cy);text-shadow:0 0 16px rgba(56,230,255,.45);
+}
+.rpg-clssub{
+  font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;
+  color:var(--violet);margin:4px 0 12px;min-height:1em;
+}
+
+/* ---- form cross-fade + the swap group each creature lives in ---- */
+.rpg-form{transition:opacity .35s ease}
+.rpg-holo svg{transition:filter .5s ease}
+
+/* ---- .dry: human tracked without water → desaturated / parched tint ---- */
+.rpg-holo.rpg-dry svg{filter:saturate(.3) sepia(.3) brightness(.9)}
+
+/* ---- .limber: istezanje tracked → the whole creature sways/stretches (pivot at feet).
+   The preview's approved "limber" SWAY — NOT the old ugly lines. transform-box:view-box
+   makes transform-origin use the 240x460 viewBox space. ---- */
+.rpg-holo.rpg-limber .rpg-form{
+  animation:rpg-sway 3.6s ease-in-out infinite;
+  transform-box:view-box;transform-origin:120px 406px;
+}
+@keyframes rpg-sway{
+  0%,100%{transform:rotate(-3deg) scaleY(1)}
+  50%{transform:rotate(3deg) scaleY(1.035)}
+}
+
+/* ---- fokus halo fades in/out with enabled.fokus (opacity driven from JS) ---- */
+#rpg-focus-halo{transition:opacity .5s ease}
+
+/* ---- skeleton bone strokes (the "skelet" creature) ---- */
+.rpg-bone{stroke:#cdd8de;stroke-width:2.4;fill:none;stroke-linecap:round;opacity:.92}
+
+/* ---- stat rows / radar axes on the neutral baseline → grey "osnova" ---- */
+.rpg-arow.rpg-base .rpg-av,
+.rpg-arow.rpg-base .rpg-an{color:var(--hud-dim)}
+.rpg-osnova{
+  display:inline-block;font-size:.5rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--hud-dim);border:1px solid var(--panelbd);border-radius:5px;
+  padding:1px 4px;margin-left:6px;vertical-align:middle;
+}
+
+/* ---- respect reduced motion: the app's global *{animation:none!important} already
+   kills the CSS sway, and rpg.js omits the SMIL <animate> nodes; this is a defensive
+   belt-and-braces so the creature never moves when the user asked it not to. ---- */
+@media(prefers-reduced-motion:reduce){
+  .rpg-holo.rpg-limber .rpg-form{animation:none}
+  .rpg-form,.rpg-holo svg,#rpg-focus-halo{transition:none}
+}

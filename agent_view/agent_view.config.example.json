@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy to agent_view.config.json and edit. All fields optional. This file is a template and is safe to commit; the real config is gitignored.",
+  "host": "0.0.0.0",
+  "port": 7666,
+  "_relay_comment": "Leave relay empty for LOCAL-ONLY (nothing leaves this machine). Set it to push events to a VPS so you can watch from a phone / another computer. The relay piece is opt-in and documented in README.md — not built by default.",
+  "relay": "",
+  "apiKey": "",
+  "room": "",
+  "gemini_model_caps": {
+    "gemini-flash-lite-latest": 1000,
+    "gemini-flash-latest": 20
+  },
+  "_customer_profiles_comment": "F4: 'koristi profile kupaca' toggle. When true (the default), the ticket-reader injects the learned per-creator profile into every read and summarises it (one Gemini call) at ticket close; when false, the deterministic learning (history[]) still runs for free, but no profile rides the prompt and no AI summary call happens. Flip it from the HUD (POST /api/tickets/profiles-toggle) or here.",
+  "customer_profiles": true,
+  "_monitor_comment": "F5 (decision 2026-08-19): the VPS monitor URL + read-only MCP token, read by monitor_client.config(). A production credential, but read-only and this is a private repo, sole access — so it is tracked like the Gemini key. Leave both empty for 'not configured' (the Production tab shows a notice).",
+  "monitor": {"url": "", "token": ""},
+  "_mail_accounts_comment": "F5: mail-account METADATA only (id/name/email/host/port/ssl/user) — NEVER a password or pass_enc. The DPAPI-encrypted password stays in the gitignored agent_view.mail.config.json, per machine; run agent_view/seed_tracked_config.py once to migrate an existing local account's metadata here.",
+  "mail_accounts": []
+}

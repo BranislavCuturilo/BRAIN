@@ -1,0 +1,130 @@
+# The skill gate (`require_skill.py`) -- the only mechanism here that can REFUSE.
+#
+# Every case drives the real hook through its real stdin/stdout contract. If
+# these pass, an edit to a governed file genuinely cannot happen before the
+# governing skill is loaded; if one fails, the gate has silently become the
+# wallpaper it was built to replace.
+
+- name: a Django view cannot be written before craft-security is loaded
+  kind: gate
+  origin: >
+    The most-repeated real defect in every codebase this brain has seen: a
+    by-pk endpoint authorized with a bare scope filter instead of the helper
+    the list view uses (craft-security rule 2).
+  proves: craft-security
+  case:
+    path: apps/warehouse/views.py
+    loaded: []
+  expect: deny
+  expect_skills: [craft-security]
+
+- name: once craft-security is loaded the same view is allowed through
+  kind: gate
+  origin: >
+    A gate that never opens is a gate that gets disabled. The deny must be
+    conditional on the skill actually having been invoked, not permanent.
+  proves: craft-security
+  case:
+    path: apps/warehouse/views.py
+    loaded: [craft-security]
+  expect: allow
+
+- name: services.py is gated -- it is the most load-bearing non-framework file
+  kind: gate
+  origin: >
+    The first draft of the gate rules missed services.py entirely. Caught only
+    because a test of the gate expected a deny on it and got an allow
+    (require_skill.py DEFAULT_RULES comment).
+  proves: stack-django
+  case:
+    path: apps/procurement/services.py
+    loaded: []
+  expect: deny
+
+- name: a translation catalogue at the project ROOT is gated
+  kind: gate
+  origin: >
+    `**/locale/**` did not match a path STARTING with `locale/`, because
+    fnmatch needs something before `**/`. Half of these live at the project
+    root, so the catalogue rules applied to none of them
+    (require_skill.py `_matches`).
+  proves: craft-i18n
+  case:
+    path: locale/sr/LC_MESSAGES/django.po
+    loaded: []
+  expect: deny
+
+- name: a test file cannot be written before craft-testing is loaded
+  kind: gate
+  origin: >
+    The data-loss and silent-upload post-mortems in craft-testing: a suite
+    pointed at a real database, and outbound channels that were never
+    neutralised in test config.
+  proves: craft-testing
+  case:
+    path: apps/warehouse/tests/test_movements.py
+    loaded: []
+  expect: deny
+  expect_skills: [craft-testing]
+
+- name: a migration cannot be written before stack-django is loaded
+  kind: gate
+  origin: >
+    dj-migrations exists because a generated migration that is not a plain
+    additive nullable column -- a backfill, a rename, a NOT NULL on a
+    populated table -- is trusted far more often than it is read.
+  proves: stack-django
+  case:
+    path: apps/warehouse/migrations/0007_add_constraint.py
+    loaded: []
+  expect: deny
+
+- name: a template is gated on the UI rules
+  kind: gate
+  origin: >
+    ui-bootstrap exists because a new page stops looking like the rest of the
+    app in ways CSS reports as success -- a shorthand silently overwriting the
+    longhand, `col-*` inside a CSS grid (commits c905cff, ab039c3).
+  proves: ui-bootstrap
+  case:
+    path: apps/warehouse/templates/warehouse/list.html
+    loaded: []
+  expect: deny
+
+- name: loading ANY skill in an any-of rule satisfies it
+  kind: gate
+  origin: >
+    The rules are any-of by design -- a project's own `testing-rules` must
+    satisfy the same gate as `craft-testing`, or a project that localised its
+    rules would be permanently blocked.
+  proves: craft-testing
+  case:
+    path: apps/warehouse/tests/test_movements.py
+    loaded: [testing-rules]
+  expect: allow
+
+- name: the gate does not block a file it governs nothing about
+  kind: gate
+  origin: >
+    A gate that blocks everything is uninstalled within a day. The fourteen
+    ignored reminder hooks are the cautionary tale in the other direction;
+    this is the one in this direction.
+  proves: craft-code
+  case:
+    path: docs/NOTES.md
+    loaded: []
+  expect: allow
+
+- name: the gate fails OPEN when it cannot read the transcript
+  kind: gate
+  origin: >
+    "A gate that blocks work because it could not read a file is worse than
+    no gate" (require_skill.py header). It must deny only when it has
+    positively established a skill is missing.
+  proves: craft-code
+  case:
+    path: apps/warehouse/views.py
+    tool: Edit
+    loaded: []
+    cwd: /nonexistent-project-root
+  expect: deny

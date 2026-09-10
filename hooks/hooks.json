@@ -1,0 +1,332 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 12,
+            "command": "git -C ~/.claude/skills/brain pull --ff-only -q 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "timeout": 15,
+            "command": "python ~/.claude/skills/brain/scripts/brain/health.py --quiet 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 15,
+            "command": "python ~/.claude/skills/brain/scripts/brain/compact_brief.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "python ~/.claude/skills/brain/scripts/brain/heredoc_gate.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(**/*.py) | Write(**/*.py) | Edit(**/*.rb) | Write(**/*.rb) | Edit(**/*.php) | Write(**/*.php) | Edit(**/*.go) | Write(**/*.go) | Edit(**/*.ts) | Write(**/*.ts) | Edit(**/*.js) | Write(**/*.js)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"BRAIN: writing code — INVOKE /brain:craft-code, /brain:craft-security and /brain:craft-reuse now if not yet this session. Loading is NOT optional (delegating is): an audit of code written from recall alone, in a session where these files had been edited hours earlier, found six defects and two were verbatim violations of these very skills. Recalling a rule is not applying it. Three checks before you write: does something already do this (grep before adding a function), does every query filter by the scope column first, and is this by-id endpoint authorized through the SAME helper the list view uses?\"}}'"
+          },
+          {
+            "type": "command",
+            "if": "Edit(**/test_*.py) | Write(**/test_*.py) | Edit(**/tests/**) | Write(**/tests/**) | Edit(**/*.test.*) | Write(**/*.test.*) | Edit(**/*_test.go) | Write(**/*_test.go)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"BRAIN: writing a test — load /brain:craft-testing if not yet this session. The suite must hit a physically separate database; every outbound channel (email, notifications, HTTP, FILE STORAGE) must be neutralized in test config; randomize any column under a composite unique; an absence assertion passes vacuously against the wrong page — pair it with a presence assertion.\"}}'"
+          },
+          {
+            "type": "command",
+            "if": "Edit(**/.github/workflows/**) | Write(**/.github/workflows/**) | Edit(**/Dockerfile*) | Write(**/Dockerfile*) | Edit(**/docker-compose*) | Write(**/docker-compose*) | Edit(**/*deploy*.yml) | Write(**/*deploy*.yml) | Edit(**/*deploy*.sh) | Write(**/*deploy*.sh)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"BRAIN: touching CI/deploy — load /brain:craft-git if not yet this session. Under fail-fast, no step may depend on a bare command whose no-match result is non-zero (grep -q, test, diff) — it kills the deploy silently. Mark non-critical steps non-fatal, keep migrate/collectstatic fatal, echo a marker per step, and never rewrite published history on a shared branch.\"}}'"
+          },
+          {
+            "type": "command",
+            "if": "Edit(~/.claude/skills/brain/**) | Write(~/.claude/skills/brain/**)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"BRAIN: editing the brain itself — load /brain:brain (routing law, layers, size budget) if not yet this session. A rule belongs to the OUTERMOST layer where it is still true. Never duplicate a rule across two files. Commit and push when done (/brain:ops-sync) or the change stays on this machine only.\"}}'"
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py start 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py pretool 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 15,
+            "command": "python ~/.claude/skills/brain/scripts/brain/require_skill.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/skills/brain/scripts/brain/visual_gate.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/skills/brain/scripts/brain/visual_gate.py",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python ~/.claude/skills/brain/scripts/brain/attribute_gate.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "python ~/.claude/skills/brain/scripts/brain/review_nudge.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|NotebookRead",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "python ~/.claude/skills/brain/scripts/brain/read_guard.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "python ~/.claude/skills/brain/scripts/brain/dashboard.py >/dev/null 2>&1 || true"
+          },
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "python ~/.claude/skills/brain/scripts/brain/fanout_nudge.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py done 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py toolfail 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 15,
+            "command": "python ~/.claude/skills/brain/scripts/brain/verify_gate.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 15,
+            "command": "python ~/.claude/skills/brain/scripts/brain/archivist_nudge.py"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "python ~/.claude/skills/brain/scripts/brain/dashboard.py >/dev/null 2>&1 || true"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py turn 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py ask 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py sessionend 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "python ~/.claude/skills/brain/scripts/brain/episode.py 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "timeout": 180,
+            "command": "python ~/.claude/skills/brain/scripts/brain/sync.py --quiet 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "python ~/.claude/skills/brain/scripts/brain/prompt_router.py"
+          },
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py prompt 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py start 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/skills/brain/agent_view/hook.py done 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "python ~/.claude/skills/brain/scripts/brain/instructions_log.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "python ~/.claude/skills/brain/scripts/brain/hook_failure.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "python ~/.claude/skills/brain/scripts/brain/compact_brief.py --record 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

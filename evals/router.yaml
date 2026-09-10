@@ -1,0 +1,109 @@
+# The prompt router (`prompt_router.py`) -- the only mechanism that fires BEFORE
+# the first tool call, and the only cover for read-only work.
+#
+# It cannot deny anything; it injects context. That makes WHEN it fires its
+# whole value, and makes a silent regression here invisible: nothing fails, the
+# session simply proceeds without the rules, exactly as the 27-app sweep did.
+#
+# Prompts are written the way they are actually typed -- Serbian first.
+
+- name: a Serbian isolation question names craft-security and the security agent
+  kind: router
+  origin: >
+    One measured session swept 27 apps, found ten real defects, and invoked
+    zero skills and zero agents -- entirely legitimately, because a read-only
+    audit never touches Edit and the gate never fires (prompt_router.py header).
+  proves: craft-security
+  case:
+    prompt: "provjeri da li klijent A moze da vidi podatke klijenta B u modulu nabavke"
+  expect_names: [craft-security, security]
+
+- name: an English isolation question routes the same way
+  kind: router
+  origin: >
+    The router is keyed on Serbian and English both, because the same work is
+    described in either depending on who is asking. A pattern that only fires
+    in one language covers half the sessions.
+  proves: craft-security
+  case:
+    prompt: "can tenant A reach tenant B data through this permission check"
+  expect_names: [craft-security]
+
+- name: a translation request names craft-i18n and the translator
+  kind: router
+  origin: >
+    craft-i18n exists because a catalogue goes stale silently -- and because
+    #87083 was shot after the sr_Latn .po/.mo, so the visual BEFORE had to
+    revert the compiled catalogue too.
+  proves: craft-i18n
+  case:
+    prompt: "treba prevod novih stringova na engleski, izgenerisi .po"
+  expect_names: [craft-i18n, translator]
+
+- name: a deploy question names craft-git
+  kind: router
+  origin: >
+    Two real production outages: a bare `grep -q` under fail-fast killed the
+    deploy silently, and nothing shipped while the pipeline reported success
+    (craft-git).
+  proves: craft-git
+  case:
+    prompt: "deploy je prosao ali na produkciji nema promena, treba mi rebase i push"
+  expect_names: [craft-git]
+
+- name: a repo-wide sweep is recognised as WIDE and told to fan out
+  kind: router
+  origin: >
+    The same 27-app sweep: the parts were independent and the raw output
+    flooded the main context. Breadth detection is what turns that into
+    parallel agents instead of one exhausted session.
+  proves: ops-delegation
+  case:
+    prompt: "uradi reviziju svih aplikacija u repou i nadji mrtav kod"
+  expect_names: ["WIDE"]
+
+- name: 'the "declared but nothing reads it" phrasing routes to impact-mapper'
+  kind: router
+  origin: >
+    The pattern that produced ten real defects in one sweep. It reads as
+    ordinary prose, so no other pattern in the router catches it
+    (prompt_router.py AGENTS comment).
+  proves: ops-delegation
+  case:
+    prompt: "cini mi se da ovaj guard nema nijedan poziv nigde"
+  expect_names: [impact-mapper]
+
+- name: a service-layer report is caught without a word boundary
+  kind: router
+  origin: >
+    `\bservice` misses `DeadlineService`, because the word boundary falls
+    before `Deadline` -- and a class name is exactly how people phrase a
+    report about one (prompt_router.py AGENTS comment).
+  proves: ops-delegation
+  case:
+    prompt: "DeadlineService racuna pogresan rok"
+  expect_names: [dj-service]
+
+- name: a security prompt is not crowded out of the first six skills
+  kind: router
+  origin: >
+    The router truncates at `skills[:6]` and `agents[:5]`. A prompt that trips
+    many topic patterns can push the governing skill past the cut, so the one
+    rule that had to be named is the one dropped -- silently, because a router
+    that names five skills looks like it worked.
+  proves: craft-security
+  case:
+    prompt: >
+      treba mi migracija i novi ekran i prevod i test i optimizacija upita,
+      a mora da ostane izolacija podataka po tenantu
+  expect_names: [craft-security]
+
+- name: an unrelated prompt injects nothing at all
+  kind: router
+  origin: >
+    "Do not oversell it. It nudges." A router that fires on everything is the
+    fourteen ignored reminders again, one layer earlier.
+  proves: ops-delegation
+  case:
+    prompt: "kako si danas"
+  expect_absent: ["invoke the skills"]
