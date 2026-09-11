@@ -49,7 +49,7 @@ MARKER = ROOT / "journal" / "sync-last.json"
 #: wins, so the specific generated files are listed before `docs/`.
 GROUPS = [
     ("generated", ("docs/AGENTS.md", "docs/SKILLS.md", "docs/DASHBOARD.md",
-                   "docs/dashboard.html", "docs/index.html"),
+                   "docs/dashboard.html", "docs/reference.html"),
      "regenerated catalogues and dashboard"),
     ("data", ("tickets_store/", "journal/"),
      "ticket store, worklog and session records"),

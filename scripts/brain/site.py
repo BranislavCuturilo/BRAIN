@@ -6,7 +6,7 @@ in a single self-contained page with a sidebar, so the documentation is
 readable offline in a browser without GitHub and without a static-site
 generator.
 
-  site.py            write docs/index.html
+  site.py            write docs/reference.html
   site.py --open     write it and open it
 
 Pure standard library. The markdown subset covers what these docs actually
@@ -24,7 +24,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-OUT = ROOT / "docs" / "index.html"
+# docs/index.html is the hand-written landing page GitHub Pages serves at the
+# site root; writing there would overwrite it.
+OUT = ROOT / "docs" / "reference.html"
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

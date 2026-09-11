@@ -17,6 +17,7 @@ clone.
 
 | | |
 |---|---|
+| **[Landing page](https://branislavcuturilo.github.io/BRAIN/)** | the method, Live Agent View and the ticket shift, drawn — `docs/index.html`, served by GitHub Pages |
 | **[docs/SETUP.md](docs/SETUP.md)** | new machine, environment variables, what the hooks do, troubleshooting |
 | **[docs/TESTING.md](docs/TESTING.md)** | the ordered path from "it exists" to "it works" |
 | **[evals/README.md](evals/README.md)** | the regression suite for the brain itself — the two tiers, the five kinds |
@@ -29,6 +30,42 @@ Prose for a human reader sits beside the thing it describes:
 [`skills/`](skills/README.md) · [`agents/`](agents/README.txt) ·
 [`workflows/`](workflows/README.md) · [`scripts/`](scripts/README.md) ·
 [`journal/`](journal/README.md)
+
+## Three parts, one method
+
+The Claude Code layer holds the rules and the team. Live Agent View is where they
+are seen and carried out — the shift starts there, work is dispatched from there,
+and what the work produced comes back through it. The third part,
+[EmikonBugReporter](https://github.com/BranislavCuturilo/EmikonBugReporter), stands
+on its own: a Chrome extension that lets a client report a bug from the page it
+happened on, and works better the more the application declares about that page.
+
+```mermaid
+flowchart LR
+  subgraph CC["Claude Code layer — rules, team, measurement"]
+    direction TB
+    S["skills/<br/>four layers + CLAUDE.md"]
+    A["agents/<br/>graded, own model and effort"]
+    H["hooks/<br/>12 events"]
+    SC["scripts/<br/>measure and extract"]
+    J["journal/ + scores"]
+  end
+  subgraph LAV["Live Agent View — see, dispatch, live the day"]
+    direction TB
+    HUD["HUD · Flow · Table"]
+    D["Dashboard · Brain log"]
+    T["Tickets"]
+    M["Mail · Git · Production · Kalendar"]
+    P["Profil · reminders · idle game"]
+  end
+  EBR["EmikonBugReporter — part three<br/>Chrome extension on the client's page"]
+  H -- "POST /event → SSE" --> HUD
+  T -- "suggested prompt you read first" --> A
+  T -- "resolutions, ratings, returns" --> J
+  J -- "scores, usage" --> D
+  EBR -- "tickets + trace tag" --> T
+  S -. "screen rules → extension skills" .-> EBR
+```
 
 ## The idea
 
@@ -99,7 +136,72 @@ later. On its first run the suite found two live defects: the prompt router
 missed the plainest phrasing of a cross-tenant question, and a test passed
 everywhere except the machine that owned it.
 
+## Live Agent View
+
+[`agent_view/`](agent_view/README.md) is the other half: a local web app on the
+Python standard library — `python agent_view/start.py`, port 7666, reachable from
+a phone on the same LAN. Its screens are HUD, Table, Dashboard, Flow, Tickets,
+Brain log, Git, Production, Mail, Profil and Kalendar, plus voice commands through
+Gemini, an idle game that quizzes you while Claude works, and a character that
+keeps the water, stretching and exercise reminders.
+
+The ticket shift it runs, every day:
+
+```mermaid
+flowchart LR
+  RS["Rescan<br/>helpdesk API + estimates"] --> TR["Triage<br/>local until sync"]
+  TR --> AN["Analyse<br/>Gemini → suggested prompt"]
+  AN --> MG{"related tickets?"}
+  MG -- yes --> ONE["Merge into one prompt"]
+  MG -- no --> CL
+  ONE --> CL["Claude<br/>copy · terminal · one per ticket"]
+  CL --> SH["Before / after<br/>changed regions enlarged"]
+  SH --> SY["Close and sync"]
+  SY --> RT["Customer rates the work"]
+  SY -. reopened .-> BK["Vraćeni / Dopune<br/>only what was added"]
+  BK --> AN
+```
+
+## EmikonBugReporter — part three
+
+A client sees `/xyz` on their site misbehave. Instead of going to the ticketing
+system, they open [EmikonBugReporter](https://github.com/BranislavCuturilo/EmikonBugReporter)
+on that page: a wizard (evidence, description, questions, draft, send) collects
+screenshots, up to six video frames, the requests that failed or returned 4xx/5xx
+and the console errors, and Gemini drafts the ticket into the helpdesk.
+
+It works without any help from the application. It works much better when the
+application declares each screen: the project keeps `docs/pages/<url_name>.md`
+(what the screen does not allow, why, since when), and a context processor
+renders it right after `<body>` as a `page-context` and a `session-context`
+comment plus `data-page*` attributes. With that, a report asking for something
+the page lists under `NE DOZVOLJAVA` is a limitation by design, a missing right or
+feature is a question, and only the rest is a bug — without it, the extension
+never guesses intent or rights.
+
+```mermaid
+flowchart LR
+  C["Client on the page"] --> X["EmikonBugReporter<br/>wizard · screenshots · video frames<br/>failed requests · console errors"]
+  P["page-context + session-context<br/>rendered by the app"] -. when present .-> X
+  X --> G["Gemini draft<br/>limitation · question · change request · bug"]
+  G --> H["Helpdesk ticket + trace tag"]
+  H --> T["Live Agent View · Tickets"]
+  T --> R["ebr_review.py every 14 days<br/>pages that lied · pages that were silent"]
+  R -. write or fix .-> D["docs/pages/url_name.md"]
+  D --> P
+```
+
 ## Growing and pruning it
+
+```mermaid
+flowchart LR
+  W["Work<br/>sessions · tickets · commits"] --> R["Record<br/>SessionEnd → episodes.jsonl"]
+  R --> SC["Score<br/>proven · working · unproven · weak · retire"]
+  SC --> RV["Review<br/>every 14–30 days"]
+  RV --> RW["Rewrite<br/>sharpen · split · move · delete"]
+  RW --> W
+  U(["your correction"]) -. routed to one layer .-> RW
+```
 
 Rules arrive through `/brain:capture` at natural boundaries. A `SessionEnd` hook
 records every session into `journal/episodes.jsonl` without being asked, and
