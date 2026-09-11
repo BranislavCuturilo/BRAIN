@@ -55,8 +55,8 @@ flowchart LR
     HUD["HUD · Flow · Table"]
     D["Dashboard · Brain log"]
     T["Tickets"]
-    M["Mail · Git · Production · Kalendar"]
-    P["Profil · reminders · idle game"]
+    M["Mail · Git · Production · Calendar"]
+    P["Profile · reminders · idle game"]
   end
   EBR["EmikonBugReporter — part three<br/>Chrome extension on the client's page"]
   H -- "POST /event → SSE" --> HUD
@@ -141,7 +141,7 @@ everywhere except the machine that owned it.
 [`agent_view/`](agent_view/README.md) is the other half: a local web app on the
 Python standard library — `python agent_view/start.py`, port 7666, reachable from
 a phone on the same LAN. Its screens are HUD, Table, Dashboard, Flow, Tickets,
-Brain log, Git, Production, Mail, Profil and Kalendar, plus voice commands through
+Brain log, Git, Production, Mail, Profile and Calendar, plus voice commands through
 Gemini, an idle game that quizzes you while Claude works, and a character that
 keeps the water, stretching and exercise reminders.
 
@@ -158,7 +158,7 @@ flowchart LR
   CL --> SH["Before / after<br/>changed regions enlarged"]
   SH --> SY["Close and sync"]
   SY --> RT["Customer rates the work"]
-  SY -. reopened .-> BK["Vraćeni / Dopune<br/>only what was added"]
+  SY -. reopened .-> BK["Returned / follow-ups<br/>only what was added"]
   BK --> AN
 ```
 
@@ -175,7 +175,8 @@ application declares each screen: the project keeps `docs/pages/<url_name>.md`
 (what the screen does not allow, why, since when), and a context processor
 renders it right after `<body>` as a `page-context` and a `session-context`
 comment plus `data-page*` attributes. With that, a report asking for something
-the page lists under `NE DOZVOLJAVA` is a limitation by design, a missing right or
+the page declares it does not allow (a `NE DOZVOLJAVA:` line, the keyword the
+extension's parser matches) is a limitation by design, a missing right or
 feature is a question, and only the rest is a bug — without it, the extension
 never guesses intent or rights.
 
